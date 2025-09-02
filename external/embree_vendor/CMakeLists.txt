@@ -24,7 +24,8 @@ macro(build_embree)
   set(cmake_configure_args
     -Wno-dev
     -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_install
-    -DEMBREE_ISPC_SUPPORT=OFF)
+    -DEMBREE_ISPC_SUPPORT=OFF
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5)
 
   include(ExternalProject)
   externalproject_add(embree-ext

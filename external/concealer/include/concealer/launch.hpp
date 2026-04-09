@@ -33,9 +33,23 @@ auto ros2_launch(
   const auto argv = [&]() {
     auto argv = std::vector<std::string>();
 
-    argv.push_back("python3");
-    argv.push_back(boost::algorithm::replace_all_copy(dollar("which ros2"), "\n", ""));
-    argv.push_back("launch");
+    // Use play_launch if available (faster Rust parser, web UI, monitoring).
+    // Falls back to ros2 launch if play_launch is not installed.
+    const auto play_launch_path = dollar("which play_launch 2>/dev/null");
+    const auto trimmed_path =
+      boost::algorithm::replace_all_copy(play_launch_path, "\n", "");
+    if (!trimmed_path.empty()) {
+      argv.push_back(trimmed_path);
+      argv.push_back("launch");
+      // Use a different web UI port than the outer play_launch (default :8080)
+      argv.push_back("--web-addr");
+      argv.push_back("0.0.0.0:8082");
+    } else {
+      argv.push_back("python3");
+      argv.push_back(boost::algorithm::replace_all_copy(dollar("which ros2"), "\n", ""));
+      argv.push_back("launch");
+    }
+
     argv.push_back(package);
     argv.push_back(file);
 

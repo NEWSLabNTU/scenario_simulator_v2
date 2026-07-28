@@ -41,9 +41,13 @@ auto ros2_launch(
     if (!trimmed_path.empty()) {
       argv.push_back(trimmed_path);
       argv.push_back("launch");
-      // Use a different web UI port than the outer play_launch (default :8080)
+      // Web UI address for the Autoware this forks. It must differ from the outer
+      // play_launch (default :8080), and from any other stack on this host -- a second
+      // simulator, or a background AV's Autoware, would otherwise collide on the port and
+      // fail to bind. Override with PLAY_LAUNCH_WEB_ADDR.
+      const auto web_addr_env = std::getenv("PLAY_LAUNCH_WEB_ADDR");
       argv.push_back("--web-addr");
-      argv.push_back("0.0.0.0:8082");
+      argv.push_back(web_addr_env != nullptr ? std::string(web_addr_env) : "0.0.0.0:8082");
     } else {
       argv.push_back("python3");
       argv.push_back(boost::algorithm::replace_all_copy(dollar("which ros2"), "\n", ""));

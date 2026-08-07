@@ -40,6 +40,15 @@ EgoEntity::EgoEntity(
   const Configuration & configuration,
   const rclcpp::node_interfaces::NodeParametersInterface::SharedPtr & node_parameters)
 : VehicleEntity(name, entity_status, parameters), FieldOperatorApplication([&]() {
+    /*
+       When managed_ego:=false is given, scenario_simulator_v2 neither
+       launches nor drives the ego's Autoware: no Autoware is launched here
+       (regardless of launch_autoware) and the FieldOperatorApplication base
+       is constructed in an inert mode (see its managed data member).
+    */
+    if (not common::getParameter<bool>(node_parameters, "managed_ego", true)) {
+      return 0;
+    }
     if (const auto architecture_type = common::getParameter<std::string>(
           node_parameters, "architecture_type", "awf/universe/20240605");
         architecture_type.find("awf/universe") != std::string::npos) {
@@ -79,7 +88,8 @@ EgoEntity::EgoEntity(
       throw common::SemanticError(
         "Unexpected architecture_type ", std::quoted(architecture_type), " was given.");
     }
-  }())
+  }(),
+  common::getParameter<bool>(node_parameters, "managed_ego", true))
 {
 }
 

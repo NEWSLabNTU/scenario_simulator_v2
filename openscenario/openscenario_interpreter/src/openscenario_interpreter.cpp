@@ -166,9 +166,16 @@ auto Interpreter::on_activate(const rclcpp_lifecycle::State &) -> Result
                   currentScenarioDefinition()->entities.end(), [this](const auto & each) {
                     return std::apply(
                       [this](const auto & name, const Object & object) {
+                        /*
+                           An ego that is not managed by scenario_simulator_v2
+                           (managed_ego:=false) is never engaged through the
+                           concealer, so it must not gate the start of the
+                           storyboard.
+                        */
                         return not object.is<ScenarioObject>() or
                                not object.as<ScenarioObject>().is_added or
                                not object.as<ScenarioObject>().object_controller.isAutoware() or
+                               not common::getParameter<bool>("managed_ego", true) or
                                NonStandardOperation::isEngaged(name);
                       },
                       each);
@@ -278,10 +285,16 @@ auto Interpreter::on_activate(const rclcpp_lifecycle::State &) -> Result
           currentScenarioDefinition()->storyboard.init.evaluateInstantaneousActions();
 
           for (const auto & [name, object] : currentScenarioDefinition()->entities) {
+            /*
+               An ego that is not managed by scenario_simulator_v2
+               (managed_ego:=false) is engaged by whatever external system
+               manages its Autoware, so the interpreter must not engage it.
+            */
             if (
               object.template is<ScenarioObject>() and
               object.template as<ScenarioObject>().is_added and
-              object.template as<ScenarioObject>().object_controller.isAutoware()) {
+              object.template as<ScenarioObject>().object_controller.isAutoware() and
+              common::getParameter<bool>("managed_ego", true)) {
               NonStandardOperation::engage(name);
             }
           }

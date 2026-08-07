@@ -53,6 +53,15 @@ struct FieldOperatorApplication : public rclcpp::Node
 {
   pid_t process_id;
 
+  /*
+     False when the ego vehicle is not managed by scenario_simulator_v2
+     (parameter managed_ego:=false). In that case this application is inert:
+     no Autoware-facing subscriptions or service clients are created, no task
+     is ever queued, and every operation that would drive Autoware throws
+     immediately (see requireManaged).
+  */
+  const bool managed = true;
+
   bool initialized = false;
 
   std::atomic<bool> finalized = false;
@@ -151,9 +160,18 @@ struct FieldOperatorApplication : public rclcpp::Node
     }
   }
 
-  CONCEALER_PUBLIC explicit FieldOperatorApplication(const pid_t);
+  CONCEALER_PUBLIC explicit FieldOperatorApplication(const pid_t, const bool managed = true);
 
   ~FieldOperatorApplication();
+
+  /*
+     Throws common::SemanticError if this application was constructed with
+     managed_ego:=false. Every operation that would drive Autoware on behalf
+     of the scenario calls this first, so that a scenario written for a
+     managed ego fails fast with a diagnostic naming the parameter instead of
+     timing out on a service that will never appear.
+  */
+  auto requireManaged(const std::string & operation) const -> void;
 
   auto spinSome() -> void;
 

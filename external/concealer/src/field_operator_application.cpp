@@ -77,22 +77,23 @@ auto toModuleType(const std::string & module_name)
 }
 
 // clang-format off
-FieldOperatorApplication::FieldOperatorApplication(const pid_t pid)
+FieldOperatorApplication::FieldOperatorApplication(const pid_t pid, const bool managed)
 : rclcpp::Node("concealer_user", "simulation", rclcpp::NodeOptions().use_global_arguments(false)),
   process_id(pid),
+  managed(managed),
   time_limit(std::chrono::steady_clock::now() + std::chrono::seconds(common::getParameter<int>("initialize_duration"))),
-  getAutowareState("/autoware/state", rclcpp::QoS(1), *this),
-  getCommand("/control/command/control_cmd", rclcpp::QoS(1), *this),
-  getCooperateStatusArray("/api/external/get/rtc_status", rclcpp::QoS(1), *this),
-  getEmergencyState("/api/external/get/emergency", rclcpp::QoS(1), *this, [this](const auto & message) {
+  getAutowareState(managed, "/autoware/state", rclcpp::QoS(1), *this),
+  getCommand(managed, "/control/command/control_cmd", rclcpp::QoS(1), *this),
+  getCooperateStatusArray(managed, "/api/external/get/rtc_status", rclcpp::QoS(1), *this),
+  getEmergencyState(managed, "/api/external/get/emergency", rclcpp::QoS(1), *this, [this](const auto & message) {
     if (message.emergency) {
       throw common::Error("Emergency state received");
     }
   }),
 #if __has_include(<autoware_adapi_v1_msgs/msg/localization_initialization_state.hpp>)
-  getLocalizationState("/api/localization/initialization_state", rclcpp::QoS(1).transient_local(), *this),
+  getLocalizationState(managed, "/api/localization/initialization_state", rclcpp::QoS(1).transient_local(), *this),
 #endif
-  getMrmState("/api/fail_safe/mrm_state", rclcpp::QoS(1), *this, [this](const auto & message) {
+  getMrmState(managed, "/api/fail_safe/mrm_state", rclcpp::QoS(1), *this, [this](const auto & message) {
     auto state_name_of = [](auto state) constexpr {
       switch (state) {
         case MrmState::MRM_FAILED:
@@ -145,24 +146,24 @@ FieldOperatorApplication::FieldOperatorApplication(const pid_t pid)
     minimum_risk_maneuver_behavior = behavior_name_of(message.behavior);
   }),
 #if __has_include(<autoware_adapi_v1_msgs/msg/operation_mode_state.hpp>)
-  getOperationModeState("/api/operation_mode/state", rclcpp::QoS(1).transient_local(), *this),
+  getOperationModeState(managed, "/api/operation_mode/state", rclcpp::QoS(1).transient_local(), *this),
 #endif
-  getPathWithLaneId("/planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id", rclcpp::QoS(1), *this),
+  getPathWithLaneId(managed, "/planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id", rclcpp::QoS(1), *this),
 #if __has_include(<autoware_adapi_v1_msgs/msg/route_state.hpp>)
-  getRouteState("/api/routing/state", rclcpp::QoS(1).transient_local(), *this),
+  getRouteState(managed, "/api/routing/state", rclcpp::QoS(1).transient_local(), *this),
 #endif
-  getTurnIndicatorsCommand("/control/command/turn_indicators_cmd", rclcpp::QoS(1), *this),
-  requestClearRoute("/api/routing/clear_route", *this),
-  requestCooperateCommands("/api/external/set/rtc_commands", *this),
-  requestEngage("/api/external/set/engage", *this),
-  requestInitialPose("/api/localization/initialize", *this, std::chrono::seconds(common::getParameter<int>("initialize_localization"))),
+  getTurnIndicatorsCommand(managed, "/control/command/turn_indicators_cmd", rclcpp::QoS(1), *this),
+  requestClearRoute(managed, "/api/routing/clear_route", *this),
+  requestCooperateCommands(managed, "/api/external/set/rtc_commands", *this),
+  requestEngage(managed, "/api/external/set/engage", *this),
+  requestInitialPose(managed, "/api/localization/initialize", *this, std::chrono::seconds(common::getParameter<int>("initialize_localization"))),
   // NOTE: routing takes a long time to return. But the specified duration is not decided by any technical reasons.
-  requestSetRoute("/api/routing/set_route", *this, std::chrono::seconds(10)),
-  requestSetRoutePoints("/api/routing/set_route_points", *this, std::chrono::seconds(10)),
-  requestSetRtcAutoMode("/api/external/set/rtc_auto_mode", *this),
-  requestSetVelocityLimit("/api/autoware/set/velocity_limit", *this),
-  requestEnableAutowareControl("/api/operation_mode/enable_autoware_control", *this),
-  requestChangeToStop("/api/operation_mode/change_to_stop", *this)
+  requestSetRoute(managed, "/api/routing/set_route", *this, std::chrono::seconds(10)),
+  requestSetRoutePoints(managed, "/api/routing/set_route_points", *this, std::chrono::seconds(10)),
+  requestSetRtcAutoMode(managed, "/api/external/set/rtc_auto_mode", *this),
+  requestSetVelocityLimit(managed, "/api/autoware/set/velocity_limit", *this),
+  requestEnableAutowareControl(managed, "/api/operation_mode/enable_autoware_control", *this),
+  requestChangeToStop(managed, "/api/operation_mode/change_to_stop", *this)
 // clang-format on
 {
   executor.add_node(get_node_base_interface());
@@ -172,14 +173,27 @@ FieldOperatorApplication::FieldOperatorApplication(const pid_t pid)
      we need to ensure that Autoware is in a safe STOP state before starting the next scenario.
      Without this, Autoware may start driving unexpectedly when the next scenario starts.
   */
-  task_queue.delay([this] {
-    /*
-       To ensure that Autoware is in a safe state, request to change to stop.
-       Ideally, we should check the operation state and only request if it's not already in STOP mode.
-       TODO: Implement state check to avoid unnecessary requests (when LegacyAutowareState is being refactored).
-    */
-    requestChangeToStop(std::make_shared<ChangeOperationMode::Request>(), 30);
-  });
+  if (managed) {
+    task_queue.delay([this] {
+      /*
+         To ensure that Autoware is in a safe state, request to change to stop.
+         Ideally, we should check the operation state and only request if it's not already in STOP mode.
+         TODO: Implement state check to avoid unnecessary requests (when LegacyAutowareState is being refactored).
+      */
+      requestChangeToStop(std::make_shared<ChangeOperationMode::Request>(), 30);
+    });
+  }
+}
+
+auto FieldOperatorApplication::requireManaged(const std::string & operation) const -> void
+{
+  if (not managed) {
+    throw common::SemanticError(
+      operation,
+      " cannot be requested because the ego vehicle is not managed by scenario_simulator_v2 "
+      "(the parameter managed_ego:=false was given). Scenarios that use ego autonomy actions "
+      "require managed_ego:=true.");
+  }
 }
 
 FieldOperatorApplication::~FieldOperatorApplication()
@@ -259,6 +273,8 @@ FieldOperatorApplication::~FieldOperatorApplication()
 
 auto FieldOperatorApplication::clearRoute() -> void
 {
+  requireManaged("clearRoute");
+
   task_queue.delay([this] {
     /*
        Since this service tends to be available long after the launch of
@@ -271,6 +287,8 @@ auto FieldOperatorApplication::clearRoute() -> void
 
 auto FieldOperatorApplication::enableAutowareControl() -> void
 {
+  requireManaged("enableAutowareControl");
+
   task_queue.delay([this]() {
     auto request = std::make_shared<ChangeOperationMode::Request>();
     requestEnableAutowareControl(request, 30);
@@ -279,6 +297,8 @@ auto FieldOperatorApplication::enableAutowareControl() -> void
 
 auto FieldOperatorApplication::engage() -> void
 {
+  requireManaged("engage");
+
   task_queue.delay([this]() {
     switch (const auto state = getLegacyAutowareState(); state.value) {
       default:
@@ -333,6 +353,8 @@ auto FieldOperatorApplication::engaged() const -> bool
 
 auto FieldOperatorApplication::initialize(const geometry_msgs::msg::Pose & initial_pose) -> void
 {
+  requireManaged("initialize");
+
   if (not std::exchange(initialized, true)) {
     task_queue.delay([this, initial_pose]() {
       switch (const auto state = getLegacyAutowareState(); state.value) {
@@ -435,6 +457,8 @@ auto FieldOperatorApplication::plan(
   const geometry_msgs::msg::Pose & goal, const std::vector<geometry_msgs::msg::Pose> & waypoints,
   const RouteOption & option) -> void
 {
+  requireManaged("plan");
+
   task_queue.delay([this, goal, waypoints, option]() {
     switch (const auto state = getLegacyAutowareState(); state.value) {
       default:
@@ -463,6 +487,8 @@ auto FieldOperatorApplication::plan(
   const std::vector<autoware_adapi_v1_msgs::msg::RouteSegment> & waypoints,
   const RouteOption & option) -> void
 {
+  requireManaged("plan");
+
   task_queue.delay([this, goal, waypoints, option]() {
     switch (const auto state = getLegacyAutowareState(); state.value) {
       default:
@@ -489,6 +515,8 @@ auto FieldOperatorApplication::plan(
 auto FieldOperatorApplication::requestAutoModeForCooperation(
   const std::string & module_name, bool enable) -> void
 {
+  requireManaged("requestAutoModeForCooperation");
+
   /*
      The implementation of this function will not work properly if the
      `rtc_auto_mode_manager` package is present.
@@ -514,6 +542,8 @@ auto FieldOperatorApplication::requestAutoModeForCooperation(
 auto FieldOperatorApplication::sendCooperateCommand(
   const std::string & module_name, const std::string & command) -> void
 {
+  requireManaged("sendCooperateCommand");
+
   const auto command_type = [&]() {
     if (command == "ACTIVATE") {
       return tier4_rtc_msgs::msg::Command::ACTIVATE;
@@ -603,6 +633,8 @@ auto FieldOperatorApplication::sendCooperateCommand(
 
 auto FieldOperatorApplication::setVelocityLimit(double velocity_limit) -> void
 {
+  requireManaged("setVelocityLimit");
+
   task_queue.delay([this, velocity_limit]() {
     auto request = std::make_shared<SetVelocityLimit::Request>();
     request->velocity = velocity_limit;

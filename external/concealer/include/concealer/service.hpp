@@ -38,12 +38,20 @@ class Service
   rclcpp::WallRate interval;
 
 public:
+  /*
+     If active is false, no service client is created. This is used to
+     construct an inert FieldOperatorApplication when the ego vehicle is not
+     managed by scenario_simulator_v2 (managed_ego:=false). Such a service
+     must never be called; the FieldOperatorApplication throws before any
+     call can be reached.
+  */
   template <typename Node>
   explicit Service(
-    const std::string & name, Node & node,
+    const bool active, const std::string & name, Node & node,
     const std::chrono::nanoseconds & interval = std::chrono::seconds(3))
   : name(name),
-    client(node.template create_client<T>(name, rmw_qos_profile_services_default)),
+    client(
+      active ? node.template create_client<T>(name, rmw_qos_profile_services_default) : nullptr),
     interval(interval)
   {
   }

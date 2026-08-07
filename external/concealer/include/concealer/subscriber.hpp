@@ -35,32 +35,41 @@ struct Subscriber<Message>
 
   auto operator()() const -> Message { return *std::atomic_load(&current_value); }
 
+  /*
+     If active is false, no subscription is created and the subscriber
+     permanently returns default-constructed messages. This is used to
+     construct an inert FieldOperatorApplication when the ego vehicle is not
+     managed by scenario_simulator_v2 (managed_ego:=false).
+  */
   template <typename Autoware, typename Callback>
   explicit Subscriber(
-    const std::string & topic, const rclcpp::QoS & quality_of_service, Autoware & autoware,
-    const Callback & callback)
+    const bool active, const std::string & topic, const rclcpp::QoS & quality_of_service,
+    Autoware & autoware, const Callback & callback)
   : subscription(
-      available<Message>() ? autoware.template create_subscription<Message>(
-                               topic, quality_of_service,
-                               [this, callback](const typename Message::ConstSharedPtr & message) {
-                                 if (std::atomic_store(&current_value, message); current_value) {
-                                   callback((*this)());
-                                 }
-                               })
-                           : nullptr)
+      active and available<Message>()
+        ? autoware.template create_subscription<Message>(
+            topic, quality_of_service,
+            [this, callback](const typename Message::ConstSharedPtr & message) {
+              if (std::atomic_store(&current_value, message); current_value) {
+                callback((*this)());
+              }
+            })
+        : nullptr)
   {
   }
 
   template <typename Autoware>
   explicit Subscriber(
-    const std::string & topic, const rclcpp::QoS & quality_of_service, Autoware & autoware)
+    const bool active, const std::string & topic, const rclcpp::QoS & quality_of_service,
+    Autoware & autoware)
   : subscription(
-      available<Message>() ? autoware.template create_subscription<Message>(
-                               topic, quality_of_service,
-                               [this](const typename Message::ConstSharedPtr & message) {
-                                 std::atomic_store(&current_value, message);
-                               })
-                           : nullptr)
+      active and available<Message>()
+        ? autoware.template create_subscription<Message>(
+            topic, quality_of_service,
+            [this](const typename Message::ConstSharedPtr & message) {
+              std::atomic_store(&current_value, message);
+            })
+        : nullptr)
   {
   }
 };
@@ -83,32 +92,35 @@ struct Subscriber<Message, T, Ts...> : public Subscriber<T, Ts...>
 
   template <typename Autoware, typename Callback>
   explicit Subscriber(
-    const std::string & topic, const rclcpp::QoS & quality_of_service, Autoware & autoware,
-    const Callback & callback)
-  : Subscriber<T, Ts...>(topic, quality_of_service, autoware, callback),
+    const bool active, const std::string & topic, const rclcpp::QoS & quality_of_service,
+    Autoware & autoware, const Callback & callback)
+  : Subscriber<T, Ts...>(active, topic, quality_of_service, autoware, callback),
     subscription(
-      available<Message>() ? autoware.template create_subscription<Message>(
-                               topic, quality_of_service,
-                               [this, callback](const typename Message::ConstSharedPtr & message) {
-                                 if (std::atomic_store(&current_value, message); current_value) {
-                                   callback((*this)());
-                                 }
-                               })
-                           : nullptr)
+      active and available<Message>()
+        ? autoware.template create_subscription<Message>(
+            topic, quality_of_service,
+            [this, callback](const typename Message::ConstSharedPtr & message) {
+              if (std::atomic_store(&current_value, message); current_value) {
+                callback((*this)());
+              }
+            })
+        : nullptr)
   {
   }
 
   template <typename Autoware>
   explicit Subscriber(
-    const std::string & topic, const rclcpp::QoS & quality_of_service, Autoware & autoware)
-  : Subscriber<T, Ts...>(topic, quality_of_service, autoware),
+    const bool active, const std::string & topic, const rclcpp::QoS & quality_of_service,
+    Autoware & autoware)
+  : Subscriber<T, Ts...>(active, topic, quality_of_service, autoware),
     subscription(
-      available<Message>() ? autoware.template create_subscription<Message>(
-                               topic, quality_of_service,
-                               [this](const typename Message::ConstSharedPtr & message) {
-                                 std::atomic_store(&current_value, message);
-                               })
-                           : nullptr)
+      active and available<Message>()
+        ? autoware.template create_subscription<Message>(
+            topic, quality_of_service,
+            [this](const typename Message::ConstSharedPtr & message) {
+              std::atomic_store(&current_value, message);
+            })
+        : nullptr)
   {
   }
 };
@@ -131,12 +143,12 @@ struct Subscriber<std::tuple<Messages...>> : public Subscriber<Messages...>
   }
 
   template <typename... Ts>
-  explicit Subscriber(const std::string & topic, Ts &&... xs)
-  : Subscriber<Messages...>(topic, std::forward<decltype(xs)>(xs)...)
+  explicit Subscriber(const bool active, const std::string & topic, Ts &&... xs)
+  : Subscriber<Messages...>(active, topic, std::forward<decltype(xs)>(xs)...)
   {
     auto subscription_available = [](const auto & x) { return static_cast<bool>(x.subscription); };
 
-    if (not any(subscription_available, static_cast<const Subscriber<Messages...> &>(*this))) {
+    if (active and not any(subscription_available, static_cast<const Subscriber<Messages...> &>(*this))) {
       throw common::scenario_simulator_exception::Error(
         "No viable subscription for topic ", std::quoted(topic), " in ",
         common::getParameter<std::string>("architecture_type"), ".");

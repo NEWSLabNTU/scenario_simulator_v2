@@ -25,12 +25,12 @@ namespace concealer
 AutowareUniverse::AutowareUniverse(bool simulate_localization) try
 : rclcpp::Node("concealer", "simulation"),
   ContinuousTransformBroadcaster<AutowareUniverse>(simulate_localization? "base_link" : "base_link_ground_truth"),
-  getCommand("/control/command/control_cmd", rclcpp::QoS(1), *this),
-  getGearCommand("/control/command/gear_cmd", rclcpp::QoS(1), *this),
-  getTurnIndicatorsCommand("/control/command/turn_indicators_cmd", rclcpp::QoS(1), *this),
+  getCommand(true, "/control/command/control_cmd", rclcpp::QoS(1), *this),
+  getGearCommand(true, "/control/command/gear_cmd", rclcpp::QoS(1), *this),
+  getTurnIndicatorsCommand(true, "/control/command/turn_indicators_cmd", rclcpp::QoS(1), *this),
   getPathWithLaneId(
-    "/planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id", rclcpp::QoS(1),
-    *this),
+    true, "/planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id",
+    rclcpp::QoS(1), *this),
   setAcceleration(
     simulate_localization ? "/localization/acceleration"
                           : "/simulation/debug/localization/acceleration",

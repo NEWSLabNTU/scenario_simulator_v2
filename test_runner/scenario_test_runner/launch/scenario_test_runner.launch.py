@@ -86,6 +86,7 @@ def launch_setup(context, *args, **kwargs):
     launch_rviz                                 = LaunchConfiguration("launch_rviz",                                 default=False)
     launch_simple_sensor_simulator              = LaunchConfiguration("launch_simple_sensor_simulator",              default=True)
     launch_visualization                        = LaunchConfiguration("launch_visualization",                        default=True)
+    managed_ego                                 = LaunchConfiguration("managed_ego",                                 default=True)
     output_directory                            = LaunchConfiguration("output_directory",                            default=Path("/tmp"))
     override_parameters                         = LaunchConfiguration("override_parameters",                         default="")
     parameter_file_path                         = LaunchConfiguration("parameter_file_path",                         default=Path(get_package_share_directory("scenario_test_runner")) / "config/parameters.yaml")
@@ -124,6 +125,7 @@ def launch_setup(context, *args, **kwargs):
     print(f"launch_autoware                             := {launch_autoware.perform(context)}")
     print(f"launch_rviz                                 := {launch_rviz.perform(context)}")
     print(f"launch_visualization                        := {launch_visualization.perform(context)}")
+    print(f"managed_ego                                 := {managed_ego.perform(context)}")
     print(f"output_directory                            := {output_directory.perform(context)}")
     print(f"override_parameters                         := {override_parameters.perform(context)}")
     print(f"parameter_file_path                         := {parameter_file_path.perform(context)}")
@@ -163,6 +165,7 @@ def launch_setup(context, *args, **kwargs):
             {"initialize_duration": initialize_duration},
             {"initialize_localization": initialize_localization},
             {"launch_autoware": launch_autoware},
+            {"managed_ego": managed_ego},
             {"pedestrian_ignore_see_around": pedestrian_ignore_see_around},
             {"port": port},
             {"publish_empty_context" : publish_empty_context},
@@ -236,6 +239,7 @@ def launch_setup(context, *args, **kwargs):
         DeclareLaunchArgument("initialize_localization",                     default_value=initialize_localization                    ),
         DeclareLaunchArgument("launch_autoware",                             default_value=launch_autoware                            ),
         DeclareLaunchArgument("launch_rviz",                                 default_value=launch_rviz                                ),
+        DeclareLaunchArgument("managed_ego",                                 default_value=managed_ego                                ),
         DeclareLaunchArgument("output_directory",                            default_value=output_directory                           ),
         DeclareLaunchArgument("parameter_file_path",                         default_value=parameter_file_path                        ),
         DeclareLaunchArgument("pedestrian_ignore_see_around",                default_value=pedestrian_ignore_see_around               ),

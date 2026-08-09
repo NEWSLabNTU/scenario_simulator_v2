@@ -314,6 +314,13 @@ auto FieldOperatorApplication::engage() -> void
         break;
       case LegacyAutowareState::driving:
         break;
+      case LegacyAutowareState::arrived_goal:
+        // On a short route in a fast simulation, Autoware can complete the
+        // drive before this queued engage task runs. Arrival implies the
+        // engagement already happened; treating it as an error would fail a
+        // scenario whose vehicle did exactly what was asked.
+        time_limit = std::decay_t<decltype(time_limit)>::max();
+        break;
     }
   });
 }

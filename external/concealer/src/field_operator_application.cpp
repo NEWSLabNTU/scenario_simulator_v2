@@ -640,7 +640,22 @@ auto FieldOperatorApplication::sendCooperateCommand(
 
 auto FieldOperatorApplication::setVelocityLimit(double velocity_limit) -> void
 {
-  requireManaged("setVelocityLimit");
+  /*
+     Inert rather than fatal when unmanaged, for the same reason as the interpreter's
+     automatic engage: this is not an autonomy action a scenario author asked for.
+     `applyAssignControllerAction` calls it unconditionally for every entity carrying a
+     controller, taking `maxSpeed` from the controller properties, so every ego reaches
+     here during Init. Fast-failing it killed every unmanaged run before the storyboard
+     started -- observed as the ego spawning and being despawned 0.4 s later.
+
+     The limit still applies where it can: `EgoEntity::setVelocityLimit` records it in
+     `behavior_parameter_` before calling this, and that is the simulator-side effect. Only
+     the forward to Autoware's service is skipped, which is exactly what an inert
+     application means.
+  */
+  if (not managed) {
+    return;
+  }
 
   task_queue.delay([this, velocity_limit]() {
     auto request = std::make_shared<SetVelocityLimit::Request>();

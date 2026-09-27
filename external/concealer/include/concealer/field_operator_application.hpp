@@ -37,6 +37,7 @@
 #include <geometry_msgs/msg/accel.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tier4_external_api_msgs/msg/emergency.hpp>
 #include <tier4_external_api_msgs/srv/engage.hpp>
@@ -49,6 +50,17 @@
 
 namespace concealer
 {
+/*
+   Whether a localization estimate `actual` agrees with the pose `expected` that
+   localization was initialized with: horizontal distance within
+   position_tolerance [m] and yaw difference within yaw_tolerance [rad]. The
+   height is ignored (the map pose of a spawned vehicle and its settled
+   localization differ in z by design).
+*/
+CONCEALER_PUBLIC auto isLocalizationConsistentWith(
+  const geometry_msgs::msg::Pose & expected, const geometry_msgs::msg::Pose & actual,
+  double position_tolerance, double yaw_tolerance) -> bool;
+
 struct FieldOperatorApplication : public rclcpp::Node
 {
   pid_t process_id;
@@ -88,6 +100,7 @@ struct FieldOperatorApplication : public rclcpp::Node
   using RouteState                      = autoware_adapi_v1_msgs::msg::RouteState;
 #endif
   using TurnIndicatorsCommand           = autoware_vehicle_msgs::msg::TurnIndicatorsCommand;
+  using Odometry                        = nav_msgs::msg::Odometry;
 
   using ClearRoute                      = autoware_adapi_v1_msgs::srv::ClearRoute;
   using CooperateCommands               = tier4_rtc_msgs::srv::CooperateCommands;
@@ -115,6 +128,7 @@ struct FieldOperatorApplication : public rclcpp::Node
   Subscriber<RouteState>                      getRouteState;
 #endif
   Subscriber<TurnIndicatorsCommand>           getTurnIndicatorsCommand;
+  Subscriber<Odometry>                        getKinematicState;
 
   Service<ClearRoute>             requestClearRoute;
   Service<CooperateCommands>      requestCooperateCommands;
@@ -159,6 +173,19 @@ struct FieldOperatorApplication : public rclcpp::Node
       }
     }
   }
+
+  /*
+     Blocks until /localization/kinematic_state carries a message stamped after
+     `stamp_before_initialization` whose pose is consistent with
+     `initial_pose` (see isLocalizationConsistentWith). Throws
+     common::AutowareError naming both poses if that does not happen in time.
+     mission_planner takes a route's start from the latest kinematic_state, so
+     a route requested before this holds is planned from wherever the
+     previous scenario left the ego.
+  */
+  auto waitForLocalizationToReach(
+    const geometry_msgs::msg::Pose & initial_pose,
+    const builtin_interfaces::msg::Time & stamp_before_initialization) -> void;
 
   CONCEALER_PUBLIC explicit FieldOperatorApplication(const pid_t, const bool managed = true);
 

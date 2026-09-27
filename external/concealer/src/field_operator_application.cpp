@@ -16,7 +16,11 @@
 #include <concealer/field_operator_application.hpp>
 #include <concealer/is_package_exists.hpp>
 #include <concealer/member_detector.hpp>
+#include <cmath>
 #include <cstdlib>
+#include <iomanip>
+#include <sstream>
+#include <tuple>
 #include <exception>
 #include <scenario_simulator_exception/exception.hpp>
 #include <system_error>
@@ -153,6 +157,7 @@ FieldOperatorApplication::FieldOperatorApplication(const pid_t pid, const bool m
   getRouteState(managed, "/api/routing/state", rclcpp::QoS(1).transient_local(), *this),
 #endif
   getTurnIndicatorsCommand(managed, "/control/command/turn_indicators_cmd", rclcpp::QoS(1), *this),
+  getKinematicState(managed, "/localization/kinematic_state", rclcpp::QoS(1), *this),
   requestClearRoute(managed, "/api/routing/clear_route", *this),
   requestCooperateCommands(managed, "/api/external/set/rtc_commands", *this),
   requestEngage(managed, "/api/external/set/engage", *this),
@@ -375,7 +380,15 @@ auto FieldOperatorApplication::initialize(const geometry_msgs::msg::Pose & initi
             LegacyAutowareState::undefined, LegacyAutowareState::initializing);
           [[fallthrough]];
         case LegacyAutowareState::initializing:
-        case LegacyAutowareState::waiting_for_route:
+        case LegacyAutowareState::waiting_for_route: {
+          /*
+             The stamp of the newest localization estimate from before this
+             initialization. Any estimate that can confirm the new pose must be
+             stamped later. (Comparing with this node's clock instead would be
+             wrong: this node runs on wall time while Autoware stamps with the
+             /clock the simulator publishes.)
+          */
+          const auto stamp_before_initialization = getKinematicState().header.stamp;
           requestInitialPose(
             [&]() {
               auto request =
@@ -392,9 +405,120 @@ auto FieldOperatorApplication::initialize(const geometry_msgs::msg::Pose & initi
             30);
           waitForAutowareStateToBe(
             LegacyAutowareState::initializing, LegacyAutowareState::waiting_for_route);
+          /*
+             waiting_for_route only says the localization pipeline was
+             re-activated, not that it has published from the new pose: the EKF
+             publishes on /clock ticks, and until its first tick after
+             activation /localization/kinematic_state still holds the previous
+             estimate. With a long-lived Autoware reused across scenarios that
+             is where the previous scenario ended, and mission_planner, which
+             takes the route's start from the latest kinematic_state, would plan
+             from there. Hold the task queue (and so any plan() queued after
+             this) until localization agrees with the pose just given.
+          */
+          waitForLocalizationToReach(initial_pose, stamp_before_initialization);
           break;
+        }
       }
     });
+  }
+}
+
+auto isLocalizationConsistentWith(
+  const geometry_msgs::msg::Pose & expected, const geometry_msgs::msg::Pose & actual,
+  const double position_tolerance, const double yaw_tolerance) -> bool
+{
+  auto yaw_of = [](const auto & q) {
+    return std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+  };
+  const auto yaw_difference = std::remainder(
+    yaw_of(actual.orientation) - yaw_of(expected.orientation), 2.0 * M_PI);
+  return std::hypot(actual.position.x - expected.position.x,
+                    actual.position.y - expected.position.y) <= position_tolerance and
+         std::abs(yaw_difference) <= yaw_tolerance;
+}
+
+auto FieldOperatorApplication::waitForLocalizationToReach(
+  const geometry_msgs::msg::Pose & initial_pose,
+  const builtin_interfaces::msg::Time & stamp_before_initialization) -> void
+{
+  /*
+     1.0 m: the estimate is of base_link (the rear axle), which lies about
+     0.11 m from the pose an external simulator reports for the entity, and a
+     freshly initialized EKF settles within centimetres of its initial pose. A
+     stale estimate is wherever the previous scenario ended, typically tens of
+     metres away. 1 m is well above the former and below half a lane width, so a
+     route started from any accepted estimate starts in the right lane.
+
+     0.2 rad (~11.5 deg): a stationary, just-initialized ego matches the
+     commanded yaw to well under a degree; the bound only has to reject an
+     estimate from a different pose.
+
+     10 s: the EKF publishes once per 0.1 s of /clock, and /clock can run
+     slower than wall time on a loaded host (0.3x measured), so a fresh
+     estimate normally arrives within a second of wall time. 10 s is an order
+     of magnitude of margin while still failing well before the scenario's own
+     time limit.
+  */
+  constexpr auto position_tolerance = 1.0;
+  constexpr auto yaw_tolerance = 0.2;
+  constexpr auto timeout = std::chrono::seconds(10);
+
+  auto newer_than = [](const auto & a, const auto & b) {
+    return std::tie(a.sec, a.nanosec) > std::tie(b.sec, b.nanosec);
+  };
+
+  auto describe = [](const geometry_msgs::msg::Pose & pose) {
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2) << "(x " << pose.position.x << ", y "
+       << pose.position.y << ", yaw "
+       << std::atan2(
+            2.0 * (pose.orientation.w * pose.orientation.z +
+                   pose.orientation.x * pose.orientation.y),
+            1.0 - 2.0 * (pose.orientation.y * pose.orientation.y +
+                         pose.orientation.z * pose.orientation.z))
+       << ")";
+    return ss.str();
+  };
+
+  const auto start = std::chrono::steady_clock::now();
+  const auto deadline = std::min(start + timeout, time_limit);
+
+  for (auto stale_checks = 0; not finalized.load(); ++stale_checks) {
+    const auto estimate = getKinematicState();
+    const auto fresh = newer_than(estimate.header.stamp, stamp_before_initialization);
+    if (fresh and isLocalizationConsistentWith(
+                    initial_pose, estimate.pose.pose, position_tolerance, yaw_tolerance)) {
+      RCLCPP_INFO_STREAM(
+        get_logger(),
+        "Localization reached the initial pose "
+          << describe(initial_pose) << " at " << describe(estimate.pose.pose) << " after "
+          << std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now() - start)
+               .count()
+          << " ms (" << (stale_checks == 0 ? "no wait" : "waited") << ", " << stale_checks
+          << " stale checks); a route may now be requested.");
+      return;
+    } else if (deadline <= std::chrono::steady_clock::now()) {
+      throw common::AutowareError(
+        "Simulator initialized localization at ", describe(initial_pose),
+        ", but /localization/kinematic_state did not reach it within ",
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - start)
+          .count(),
+        " ms (tolerance ", position_tolerance, " m, ", yaw_tolerance,
+        " rad). The latest estimate is ", describe(estimate.pose.pose), " stamped ",
+        [&]() {
+          std::stringstream ss;
+          ss << estimate.header.stamp.sec << "." << std::setw(9) << std::setfill('0')
+             << estimate.header.stamp.nanosec;
+          return ss.str();
+        }(),
+        fresh ? "" : " (not newer than the initialization)",
+        ". Refusing to request a route that would be planned from that pose.");
+    } else {
+      rclcpp::GenericRate<std::chrono::steady_clock>(std::chrono::milliseconds(20)).sleep();
+    }
   }
 }
 

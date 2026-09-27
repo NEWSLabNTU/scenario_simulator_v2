@@ -74,6 +74,7 @@ def launch_setup(context, *args, **kwargs):
     architecture_type                           = LaunchConfiguration("architecture_type",                           default="awf/universe/20240605")
     autoware_launch_file                        = LaunchConfiguration("autoware_launch_file",                        default=default_autoware_launch_file_of(architecture_type.perform(context)))
     autoware_launch_package                     = LaunchConfiguration("autoware_launch_package",                     default=default_autoware_launch_package_of(architecture_type.perform(context)))
+    clock_follows_simulation_time               = LaunchConfiguration("clock_follows_simulation_time",               default=False)
     consider_acceleration_by_road_slope         = LaunchConfiguration("consider_acceleration_by_road_slope",         default=False)
     consider_pose_by_road_slope                 = LaunchConfiguration("consider_pose_by_road_slope",                 default=True)
     enable_perf                                 = LaunchConfiguration("enable_perf",                                 default=False)
@@ -92,6 +93,7 @@ def launch_setup(context, *args, **kwargs):
     parameter_file_path                         = LaunchConfiguration("parameter_file_path",                         default=Path(get_package_share_directory("scenario_test_runner")) / "config/parameters.yaml")
     pedestrian_ignore_see_around                = LaunchConfiguration("pedestrian_ignore_see_around",                default="blind")
     port                                        = LaunchConfiguration("port",                                        default=5555)
+    publish_conventional_traffic_signals        = LaunchConfiguration("publish_conventional_traffic_signals",        default=False)
     publish_empty_context                       = LaunchConfiguration("publish_empty_context",                       default=False)
     record                                      = LaunchConfiguration("record",                                      default=True)
     record_option                               = LaunchConfiguration("record_option",                               default="")
@@ -114,6 +116,7 @@ def launch_setup(context, *args, **kwargs):
     print(f"architecture_type                           := {architecture_type.perform(context)}")
     print(f"autoware_launch_file                        := {autoware_launch_file.perform(context)}")
     print(f"autoware_launch_package                     := {autoware_launch_package.perform(context)}")
+    print(f"clock_follows_simulation_time               := {clock_follows_simulation_time.perform(context)}")
     print(f"consider_acceleration_by_road_slope         := {consider_acceleration_by_road_slope.perform(context)}")
     print(f"consider_pose_by_road_slope                 := {consider_pose_by_road_slope.perform(context)}")
     print(f"enable_perf                                 := {enable_perf.perform(context)}")
@@ -131,6 +134,7 @@ def launch_setup(context, *args, **kwargs):
     print(f"parameter_file_path                         := {parameter_file_path.perform(context)}")
     print(f"pedestrian_ignore_see_around                := {pedestrian_ignore_see_around.perform(context)}")
     print(f"port                                        := {port.perform(context)}")
+    print(f"publish_conventional_traffic_signals        := {publish_conventional_traffic_signals.perform(context)}")
     print(f"publish_empty_context                       := {publish_empty_context.perform(context)}")
     print(f"record                                      := {record.perform(context)}")
     print(f"record_option                               := {record_option.perform(context)}")
@@ -160,6 +164,7 @@ def launch_setup(context, *args, **kwargs):
             {"architecture_type": architecture_type},
             {"autoware_launch_file": autoware_launch_file},
             {"autoware_launch_package": autoware_launch_package},
+            {"clock_follows_simulation_time": clock_follows_simulation_time},
             {"consider_acceleration_by_road_slope": consider_acceleration_by_road_slope},
             {"consider_pose_by_road_slope": consider_pose_by_road_slope},
             {"initialize_duration": initialize_duration},
@@ -168,6 +173,7 @@ def launch_setup(context, *args, **kwargs):
             {"managed_ego": managed_ego},
             {"pedestrian_ignore_see_around": pedestrian_ignore_see_around},
             {"port": port},
+            {"publish_conventional_traffic_signals": publish_conventional_traffic_signals},
             {"publish_empty_context" : publish_empty_context},
             {"record": record},
             {"record_option": record_option},
@@ -230,6 +236,7 @@ def launch_setup(context, *args, **kwargs):
         DeclareLaunchArgument("architecture_type",                           default_value=architecture_type                          ),
         DeclareLaunchArgument("autoware_launch_file",                        default_value=autoware_launch_file                       ),
         DeclareLaunchArgument("autoware_launch_package",                     default_value=autoware_launch_package                    ),
+        DeclareLaunchArgument("clock_follows_simulation_time",               default_value=clock_follows_simulation_time              ),
         DeclareLaunchArgument("consider_acceleration_by_road_slope",         default_value=consider_acceleration_by_road_slope        ),
         DeclareLaunchArgument("consider_pose_by_road_slope",                 default_value=consider_pose_by_road_slope                ),
         DeclareLaunchArgument("enable_perf",                                 default_value=enable_perf                                ),
@@ -243,6 +250,7 @@ def launch_setup(context, *args, **kwargs):
         DeclareLaunchArgument("output_directory",                            default_value=output_directory                           ),
         DeclareLaunchArgument("parameter_file_path",                         default_value=parameter_file_path                        ),
         DeclareLaunchArgument("pedestrian_ignore_see_around",                default_value=pedestrian_ignore_see_around               ),
+        DeclareLaunchArgument("publish_conventional_traffic_signals",        default_value=publish_conventional_traffic_signals       ),
         DeclareLaunchArgument("publish_empty_context",                       default_value=publish_empty_context                      ),
         DeclareLaunchArgument("record_option",                               default_value=record_option                              ),
         DeclareLaunchArgument("rviz_config",                                 default_value=rviz_config                                ),

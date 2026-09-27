@@ -23,7 +23,22 @@ namespace traffic_simulator
 class SimulationClock : rclcpp::Clock
 {
 public:
-  explicit SimulationClock(bool use_sim_time, double realtime_factor, double frame_rate);
+  /*
+     follows_simulation_time (NEWSLabNTU fork) only matters while use_sim_time is
+     false. It makes getCurrentRosTime(), and so the /clock this simulator publishes,
+     advance with simulated time -- the wall time at construction plus frames times
+     step time -- instead of reading the wall clock. A consumer running on /clock then
+     sees time pass at the rate the simulated world moves, even when the frame loop
+     falls behind real time.
+
+     The start time is also raised to at least the last time published by any earlier
+     clock of this kind in the same ROS domain (kept in a small file under the temp
+     directory), so consecutive scenarios never move /clock backwards for a
+     long-lived consumer.
+  */
+  explicit SimulationClock(
+    bool use_sim_time, double realtime_factor, double frame_rate,
+    bool follows_simulation_time = false);
 
   auto getCurrentRosTime() -> rclcpp::Time;
 
@@ -46,9 +61,15 @@ public:
 
   const bool use_sim_time;
 
+  const bool follows_simulation_time;
+
   double realtime_factor;
 
 private:
+  auto makeStartTime() -> rclcpp::Time;
+
+  auto persistCurrentRosTime() -> void;
+
   double frame_rate_;
 
   const rclcpp::Time time_at_the_start_of_the_simulator_;

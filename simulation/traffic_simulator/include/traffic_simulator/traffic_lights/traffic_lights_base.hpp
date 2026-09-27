@@ -99,8 +99,20 @@ public:
 
   auto registerStateChangeCallback(StateChangeCallback callback) -> void;
 
+  /*
+     Where message stamps come from. Unset, they come from the node's clock. The API sets
+     it to its SimulationClock so stamps share the time base of the /clock it publishes,
+     which differs from the node's clock when clock_follows_simulation_time is true.
+  */
+  auto setTimeSource(std::function<rclcpp::Time()> time_source) -> void
+  {
+    time_source_ = std::move(time_source);
+  }
+
 protected:
   virtual auto update() const -> void = 0;
+
+  auto now() const -> rclcpp::Time { return time_source_ ? time_source_() : clock_ptr_->now(); }
 
   auto notifyStateChange(
     const lanelet::Id lanelet_id, const std::string & state, StateChangeType change_type) -> void;
@@ -119,6 +131,8 @@ protected:
   ConfigurableRateUpdater rate_updater_;
 
   std::vector<StateChangeCallback> state_change_callbacks_;
+
+  std::function<rclcpp::Time()> time_source_;
 };
 }  // namespace traffic_simulator
 #endif  // TRAFFIC_SIMULATOR__TRAFFIC_LIGHTS__TRAFFIC_LIGHTS_BASE_HPP_

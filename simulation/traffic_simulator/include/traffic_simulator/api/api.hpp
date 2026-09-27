@@ -68,7 +68,8 @@ public:
       node, "debug_marker", rclcpp::QoS(100), rclcpp::PublisherOptionsWithAllocator<AllocatorT>())),
     clock_(
       common::getParameter<bool>(node_parameters_, "use_sim_time"),
-      std::forward<decltype(xs)>(xs)...),
+      std::forward<decltype(xs)>(xs)...,
+      common::getParameter<bool>(node_parameters_, "clock_follows_simulation_time", false)),
     zeromq_client_(
       simulation_interface::protocol, configuration.simulator_host,
       common::getParameter<int>(node_parameters_, "port", 5555)),
@@ -78,7 +79,8 @@ public:
       [this](const std::string & name) { despawn(name); }, entity_manager_ptr_,
       configuration.auto_sink_entity_types)),
     traffic_lights_ptr_(std::make_shared<TrafficLights>(
-      node, getROS2Parameter<std::string>("architecture_type", "awf/universe/20240605"))),
+      node, getROS2Parameter<std::string>("architecture_type", "awf/universe/20240605"),
+      getROS2Parameter<bool>("publish_conventional_traffic_signals", false))),
     real_time_factor_subscriber_(rclcpp::create_subscription<std_msgs::msg::Float64>(
       node, "/real_time_factor", rclcpp::QoS(rclcpp::KeepLast(1)).best_effort(),
       [this](const std_msgs::msg::Float64 & message) {
@@ -87,6 +89,8 @@ public:
   {
     entity_manager_ptr_->setVerbose(configuration_.verbose);
     entity_manager_ptr_->setTrafficLights(traffic_lights_ptr_);
+    // Stamp traffic signal messages in the same time base as the /clock published here.
+    traffic_lights_ptr_->setTimeSource([this]() { return clock_.getCurrentRosTime(); });
     if (not init()) {
       throw common::SimulationError("Failed to initialize simulator by InitializeRequest");
     }

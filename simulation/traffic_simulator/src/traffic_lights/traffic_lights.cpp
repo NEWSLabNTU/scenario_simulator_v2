@@ -78,7 +78,7 @@ auto V2ITrafficLights::addTrafficLightsStatePrediction(
   } else {
     const auto way_id = lanelet_id;
     const auto predicted_time =
-      clock_ptr_->now() + rclcpp::Duration(std::chrono::duration<double>(time_ahead_seconds));
+      now() + rclcpp::Duration(std::chrono::duration<double>(time_ahead_seconds));
 
     auto & predictions_for_current_traffic_light = predictions_[way_id];
 

@@ -49,8 +49,7 @@ public:
 private:
   auto update() const -> void override
   {
-    backward_compatible_publisher_ptr_->publish(
-      clock_ptr_->now(), generateUpdateTrafficLightsRequest());
+    backward_compatible_publisher_ptr_->publish(now(), generateUpdateTrafficLightsRequest());
     if (isAnyTrafficLightChanged()) {
       marker_publisher_ptr_->deleteMarkers();
     }
@@ -131,15 +130,51 @@ public:
 
   auto clearTrafficLightsStatePredictions() -> void;
 
+  /*
+     NEWSLabNTU fork (publish_conventional_traffic_signals). When set, every update also
+     carries the conventional signals this source returns on the external topic
+     ("/perception/traffic_light_recognition/external/traffic_signals"), merged into the
+     same message as the V2I signals: one publisher, one message per cycle, so neither
+     overwrites the other at traffic_light_arbiter. A V2I state that has bulbs replaces
+     the conventional state of the same traffic light. The legacy /v2x topic stays V2I-only.
+  */
+  auto setConventionalSignalsSource(
+    std::function<simulation_api_schema::UpdateTrafficLightsRequest()> source) -> void
+  {
+    conventional_signals_source_ = std::move(source);
+  }
+
 private:
+  static auto merge(
+    simulation_api_schema::UpdateTrafficLightsRequest conventional,
+    const simulation_api_schema::UpdateTrafficLightsRequest & v2i)
+    -> simulation_api_schema::UpdateTrafficLightsRequest
+  {
+    for (const auto & v2i_state : v2i.states()) {
+      if (auto matched = std::find_if(
+            conventional.mutable_states()->begin(), conventional.mutable_states()->end(),
+            [&](const auto & state) { return state.id() == v2i_state.id(); });
+          matched == conventional.mutable_states()->end()) {
+        *conventional.add_states() = v2i_state;
+      } else if (not v2i_state.traffic_light_status().empty()) {
+        *matched = v2i_state;
+      }
+    }
+    return conventional;
+  }
+
   auto update() const -> void override
   {
-    const auto now = clock_ptr_->now();
+    const auto now = this->now();
     auto request = generateUpdateTrafficLightsRequest();
     if (detected_) {
       detected_->apply(request);
     }
-    publisher_ptr_->publish(now, request, &predictions_);
+    if (conventional_signals_source_) {
+      publisher_ptr_->publish(now, merge(conventional_signals_source_(), request), &predictions_);
+    } else {
+      publisher_ptr_->publish(now, request, &predictions_);
+    }
     legacy_topic_publisher_ptr_->publish(now, request, &predictions_);
     if (isAnyTrafficLightChanged()) {
       marker_publisher_ptr_->deleteMarkers();
@@ -190,6 +225,8 @@ private:
   std::shared_ptr<DetectedTrafficLights> detected_;
 
   TrafficLightStatePredictions predictions_;
+
+  std::function<simulation_api_schema::UpdateTrafficLightsRequest()> conventional_signals_source_;
 };
 
 template <typename GroundTruthType>
@@ -225,11 +262,32 @@ private:
 class TrafficLights
 {
 public:
+  /*
+     publish_conventional_traffic_signals (NEWSLabNTU fork, default false as upstream):
+     also publish the conventional signals -- ground truth with any detected-state
+     overrides applied, i.e. what simple_sensor_simulator's pseudo traffic light detector
+     would report -- as autoware_perception_msgs/TrafficLightGroupArray on the V2I
+     external topic, keyed by regulatory element id. For a backend that does not run
+     simple_sensor_simulator, this is the only way the signal state reaches Autoware's
+     traffic_light_arbiter.
+  */
   template <typename NodeTypePointer>
-  explicit TrafficLights(const NodeTypePointer & node_ptr, const std::string & architecture_type)
+  explicit TrafficLights(
+    const NodeTypePointer & node_ptr, const std::string & architecture_type,
+    const bool publish_conventional_traffic_signals = false)
   : conventional_channel_(node_ptr), v2i_channel_(node_ptr, architecture_type)
   {
     v2i_channel_.getGroundTruth()->setDetectedTrafficLights(v2i_channel_.getDetected());
+
+    if (publish_conventional_traffic_signals) {
+      v2i_channel_.getGroundTruth()->setConventionalSignalsSource(
+        [ground_truth = conventional_channel_.getGroundTruth(),
+         detected = conventional_channel_.getDetected()]() {
+          auto request = ground_truth->generateUpdateTrafficLightsRequest();
+          detected->apply(request);
+          return request;
+        });
+    }
 
     conventional_channel_.getGroundTruth()->registerStateChangeCallback(
       [this, v2i = v2i_channel_.getGroundTruth()](
@@ -269,6 +327,12 @@ public:
   }
 
   auto isAnyTrafficLightChanged() -> bool;
+
+  auto setTimeSource(const std::function<rclcpp::Time()> & time_source) -> void
+  {
+    conventional_channel_.getGroundTruth()->setTimeSource(time_source);
+    v2i_channel_.getGroundTruth()->setTimeSource(time_source);
+  }
 
   auto startTrafficLightsUpdate(
     const double conventional_traffic_light_update_rate,

@@ -60,16 +60,36 @@ auto SimulationClock::makeStartTime() -> rclcpp::Time
   } else if (not follows_simulation_time) {
     return rclcpp::Time(now().nanoseconds(), RCL_ROS_TIME);
   } else {
+    /*
+       Continue from the last time an earlier clock of this kind published in this
+       domain, one step later, rather than from wall time. A long-lived consumer (the
+       ego's Autoware, reused across scenarios) then sees the gap between two scenarios
+       as a pause, which is what it was: nothing in the simulated world moved.
+
+       Starting from max(wall now, last published) instead made /clock leap forward by
+       the whole idle gap -- ~30 s between consecutive scenarios, hours after a break --
+       and every stamp Autoware held became that old at once. Measured on the first
+       tick of each scenario: all eleven topic_state_monitors timed out (timeout 30 s),
+       multi_object_tracker reported a detection delay equal to the gap, the EKF flagged
+       its pose and twist inputs as delayed with a large covariance ellipse, and the
+       planning and control validators rejected a trajectory that old -- about twenty
+       ERROR onsets and an EMERGENCY_STOP per scenario, before the ego even existed.
+
+       Wall time is only the fallback for the first clock in a domain.
+    */
     auto start = now().nanoseconds();
     if (std::ifstream file(lastPublishedTimePath()); file) {
       std::int64_t last_published = 0;
-      if (file >> last_published and last_published > start) {
-        RCLCPP_WARN_STREAM(
+      if (file >> last_published and last_published > 0) {
+        const auto step = static_cast<std::int64_t>(getStepTime() * 1e9);
+        RCLCPP_INFO_STREAM(
           rclcpp::get_logger("simulation_clock"),
-          "/clock starts " << (last_published - start) / 1e9
-                           << " s ahead of wall time: an earlier scenario published up to there, "
-                              "and /clock must not move backwards.");
-        start = last_published;
+          "/clock continues from " << last_published / 1e9
+                                   << ", where an earlier scenario in this domain stopped ("
+                                   << (start - last_published) / 1e9
+                                   << " s behind wall time); the time between scenarios is a "
+                                      "pause, not simulated time.");
+        start = last_published + step;
       }
     }
     return rclcpp::Time(start, RCL_ROS_TIME);

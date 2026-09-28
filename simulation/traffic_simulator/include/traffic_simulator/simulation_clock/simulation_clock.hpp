@@ -31,10 +31,11 @@ public:
      sees time pass at the rate the simulated world moves, even when the frame loop
      falls behind real time.
 
-     The start time is also raised to at least the last time published by any earlier
-     clock of this kind in the same ROS domain (kept in a small file under the temp
-     directory), so consecutive scenarios never move /clock backwards for a
-     long-lived consumer.
+     The start time continues from the last time published by any earlier clock of
+     this kind in the same ROS domain (kept in a small file under the temp
+     directory), one step later, so a long-lived consumer sees consecutive scenarios
+     as one continuous timeline: never backwards, and never a forward leap over the
+     idle time between runs. Wall time is used only when no earlier clock exists.
   */
   explicit SimulationClock(
     bool use_sim_time, double realtime_factor, double frame_rate,

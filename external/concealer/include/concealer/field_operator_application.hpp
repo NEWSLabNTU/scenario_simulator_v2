@@ -39,6 +39,7 @@
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <tier4_external_api_msgs/msg/emergency.hpp>
 #include <tier4_external_api_msgs/srv/engage.hpp>
 #include <tier4_external_api_msgs/srv/set_velocity_limit.hpp>
@@ -186,6 +187,23 @@ struct FieldOperatorApplication : public rclcpp::Node
   auto waitForLocalizationToReach(
     const geometry_msgs::msg::Pose & initial_pose,
     const builtin_interfaces::msg::Time & stamp_before_initialization) -> void;
+
+  /*
+     Stamp (ns) and count of the scans reaching NDT (the localization pipeline's
+     downsampled pointcloud), for waitForScansNewerThan. Only the stamp is kept.
+  */
+  std::atomic<std::int64_t> latest_localization_scan_stamp = 0;
+
+  std::atomic<std::uint64_t> localization_scan_count = 0;
+
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr localization_scan_subscription;
+
+  /*
+     Blocks until NDT has received scans stamped after `stamp`, i.e. taken by the
+     ego that exists now. Returns after a timeout (with a warning) rather than
+     throwing: it only protects the alignment from a stale scan.
+  */
+  auto waitForScansNewerThan(const builtin_interfaces::msg::Time & stamp) -> void;
 
   CONCEALER_PUBLIC explicit FieldOperatorApplication(const pid_t, const bool managed = true);
 

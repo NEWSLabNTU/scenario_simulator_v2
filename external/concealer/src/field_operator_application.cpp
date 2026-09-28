@@ -173,6 +173,15 @@ FieldOperatorApplication::FieldOperatorApplication(const pid_t pid, const bool m
 {
   executor.add_node(get_node_base_interface());
 
+  if (managed) {
+    localization_scan_subscription = create_subscription<sensor_msgs::msg::PointCloud2>(
+      "/localization/util/downsample/pointcloud", rclcpp::SensorDataQoS(),
+      [this](const sensor_msgs::msg::PointCloud2::ConstSharedPtr & scan) {
+        latest_localization_scan_stamp.store(rclcpp::Time(scan->header.stamp).nanoseconds());
+        ++localization_scan_count;
+      });
+  }
+
   /*
      In case of reusing the same Autoware instance for multiple scenarios (launch_autoware:=False),
      we need to ensure that Autoware is in a safe STOP state before starting the next scenario.
@@ -203,6 +212,40 @@ auto FieldOperatorApplication::requireManaged(const std::string & operation) con
 
 FieldOperatorApplication::~FieldOperatorApplication()
 {
+  /*
+     Hand a reused Autoware (launch_autoware:=false) back in STOP. Without this the
+     ego leaves the scenario engaged -- AUTONOMOUS, its EKF still moving at the speed
+     the ego ended at -- and that is the state the next scenario's first /clock tick
+     resumes. Every diagnostic that then blinks while localization is re-initialized
+     on the new vehicle (a pose jump, an initial covariance, the sensor gap before the
+     new ego's first frame) makes autonomous mode unavailable *while in autonomous
+     mode*, which the MRM handler answers with an EMERGENCY_STOP: measured at every
+     scenario start, before the scenario had asked Autoware for anything. The
+     constructor's own change_to_stop comes too late to prevent it -- by then the mode
+     is unavailable and the request is refused.
+
+     The route is left alone: /api/routing/clear_route is refused here, because the
+     routing API only learns of the STOP mode from a state message published on the
+     next /clock tick, and the next scenario's localization initialization clears the
+     route anyway.
+
+     /clock has already stopped when this runs, so the mode is in place before
+     Autoware's next tick. Bounded (the executor is spun here: nothing else spins this
+     node any more) and best effort: a missing or unresponsive Autoware costs a few
+     seconds and a log line, never the scenario result.
+  */
+  if (managed and not process_id) {
+    if (requestChangeToStop.callOnce(
+          std::make_shared<ChangeOperationMode::Request>(), executor, std::chrono::seconds(3))) {
+      RCLCPP_INFO_STREAM(get_logger(), "Left Autoware in STOP for the next scenario.");
+    } else {
+      RCLCPP_WARN_STREAM(
+        get_logger(),
+        "Could not change Autoware to STOP at the end of the scenario; the next scenario "
+        "starts in this one's operation mode.");
+    }
+  }
+
   if (process_id) {
     const auto sigset = [this]() {
       if (auto signal_set = sigset_t();
@@ -389,6 +432,16 @@ auto FieldOperatorApplication::initialize(const geometry_msgs::msg::Pose & initi
              /clock the simulator publishes.)
           */
           const auto stamp_before_initialization = getKinematicState().header.stamp;
+          /*
+             NDT aligns the initial pose against the newest scan it holds. Requested
+             at once -- ~0.1 s after the ego spawns -- that scan still belongs to the
+             vehicle the previous scenario despawned, possibly 200 m away, and the
+             alignment answers with it: measured up to 1.6 m off and, once, facing
+             backwards (yaw 0.04 for 3.14), which waitForLocalizationToReach then
+             rightly refused. Wait for scans taken by this ego first; they cost well
+             under a second.
+          */
+          waitForScansNewerThan(stamp_before_initialization);
           requestInitialPose(
             [&]() {
               auto request =
@@ -421,6 +474,37 @@ auto FieldOperatorApplication::initialize(const geometry_msgs::msg::Pose & initi
         }
       }
     });
+  }
+}
+
+auto FieldOperatorApplication::waitForScansNewerThan(const builtin_interfaces::msg::Time & stamp)
+  -> void
+{
+  /*
+     Two scans, not one: the first after a spawn can be a partial sweep, and the
+     second guarantees NDT has finished taking in the first. 10 s of wall time is
+     the same margin waitForLocalizationToReach allows for a /clock that runs
+     slower than wall time.
+  */
+  constexpr std::uint64_t scans_required = 2;
+  const auto reference = rclcpp::Time(stamp).nanoseconds();
+  const auto deadline =
+    std::min(std::chrono::steady_clock::now() + std::chrono::seconds(10), time_limit);
+  std::uint64_t fresh = 0;
+  for (auto counted = localization_scan_count.load(); not finalized.load();) {
+    if (const auto count = localization_scan_count.load(); count != counted) {
+      counted = count;
+      if (latest_localization_scan_stamp.load() > reference and ++fresh >= scans_required) {
+        return;
+      }
+    }
+    if (deadline <= std::chrono::steady_clock::now()) {
+      RCLCPP_WARN_STREAM(
+        get_logger(), "NDT received " << fresh << " scan(s) from the new ego within 10 s; "
+                                          "initializing localization anyway.");
+      return;
+    }
+    rclcpp::GenericRate<std::chrono::steady_clock>(std::chrono::milliseconds(20)).sleep();
   }
 }
 

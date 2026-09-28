@@ -37,7 +37,67 @@ class Service
 
   rclcpp::WallRate interval;
 
+private:
+  static auto receive(const typename T::Response::SharedPtr & response) -> bool
+  {
+    if constexpr (DetectMember_status<typename T::Response>::value) {
+      if constexpr (std::is_same_v<
+                      tier4_external_api_msgs::msg::ResponseStatus,
+                      decltype(T::Response::status)>) {
+        return response->status.code == tier4_external_api_msgs::msg::ResponseStatus::SUCCESS;
+      } else if constexpr (std::is_same_v<
+                             autoware_adapi_v1_msgs::msg::ResponseStatus,
+                             decltype(T::Response::status)>) {
+        return response->status.success;
+      } else {
+        static_assert([]() { return false; });
+      }
+    } else if constexpr (DetectMember_success<typename T::Response>::value) {
+      if constexpr (std::is_same_v<bool, decltype(T::Response::success)>) {
+        return response->success;
+      } else {
+        static_assert([]() { return false; });
+      }
+    } else if constexpr (DetectMember_responses<typename T::Response>::value) {
+      if constexpr (std::is_same_v<
+                      std::vector<tier4_rtc_msgs::msg::CooperateResponse>,
+                      decltype(T::Response::responses)>) {
+        return std::all_of(
+          response->responses.begin(), response->responses.end(),
+          [](const auto & response) { return response.success; });
+      } else {
+        static_assert([]() { return false; });
+      }
+    } else {
+      static_assert([]() { return false; });
+    }
+  }
+
 public:
+  /*
+     One bounded attempt, spinning `executor` itself until the response arrives or
+     `timeout` passes. For a caller that nothing else is spinning for -- a destructor --
+     where operator()'s unbounded availability wait and retries would hold the process.
+     Returns whether Autoware accepted the request; never throws.
+  */
+  template <typename Executor>
+  auto callOnce(
+    const typename T::Request::SharedPtr & request, Executor & executor,
+    const std::chrono::nanoseconds & timeout) -> bool
+  {
+    try {
+      if (not client or not client->service_is_ready()) {
+        return false;
+      }
+      auto future = client->async_send_request(request);
+      return executor.spin_until_future_complete(future, timeout) ==
+               rclcpp::FutureReturnCode::SUCCESS and
+             receive(future.get());
+    } catch (...) {
+      return false;
+    }
+  }
+
   /*
      If active is false, no service client is created. This is used to
      construct an inert FieldOperatorApplication when the ego vehicle is not
@@ -70,40 +130,6 @@ public:
       }
       interval.sleep();
     }
-
-    auto receive = [this](const auto & response) {
-      if constexpr (DetectMember_status<typename T::Response>::value) {
-        if constexpr (std::is_same_v<
-                        tier4_external_api_msgs::msg::ResponseStatus,
-                        decltype(T::Response::status)>) {
-          return response->status.code == tier4_external_api_msgs::msg::ResponseStatus::SUCCESS;
-        } else if constexpr (std::is_same_v<
-                               autoware_adapi_v1_msgs::msg::ResponseStatus,
-                               decltype(T::Response::status)>) {
-          return response->status.success;
-        } else {
-          static_assert([]() { return false; });
-        }
-      } else if constexpr (DetectMember_success<typename T::Response>::value) {
-        if constexpr (std::is_same_v<bool, decltype(T::Response::success)>) {
-          return response->success;
-        } else {
-          static_assert([]() { return false; });
-        }
-      } else if constexpr (DetectMember_responses<typename T::Response>::value) {
-        if constexpr (std::is_same_v<
-                        std::vector<tier4_rtc_msgs::msg::CooperateResponse>,
-                        decltype(T::Response::responses)>) {
-          return std::all_of(
-            response->responses.begin(), response->responses.end(),
-            [](const auto & response) { return response.success; });
-        } else {
-          static_assert([]() { return false; });
-        }
-      } else {
-        static_assert([]() { return false; });
-      }
-    };
 
     for (std::size_t attempt = 0; attempt < attempts_count; ++attempt, interval.sleep()) {
       if (auto future = client->async_send_request(request);

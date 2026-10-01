@@ -18,6 +18,7 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 
+#include <functional>
 #include <get_parameter/get_parameter.hpp>
 #include <traffic_simulator/api/configuration.hpp>
 #include <traffic_simulator/entity/ego_entity.hpp>
@@ -89,6 +90,15 @@ public:
   auto setTrafficLights(const std::shared_ptr<TrafficLights> & traffic_lights_ptr) -> void;
 
   auto setVerbose(const bool verbose) -> void;
+
+  /*
+     Where header stamps come from (NEWSLabNTU fork). Unset, they read the node's clock,
+     as upstream; API sets it to the simulation clock when clock_source is simulator.
+  */
+  auto setTimeSource(std::function<rclcpp::Time()> time_source) -> void
+  {
+    time_source_ = std::move(time_source);
+  }
 
   auto startNpcLogic(const double current_time) -> void;
 
@@ -236,6 +246,10 @@ private:
   /* */ Configuration configuration_;
 
   const rclcpp::Clock::SharedPtr clock_ptr_;
+
+  std::function<rclcpp::Time()> time_source_;
+
+  auto now() const -> rclcpp::Time { return time_source_ ? time_source_() : clock_ptr_->now(); }
 
   const rclcpp::node_interfaces::NodeParametersInterface::SharedPtr node_parameters_;
 

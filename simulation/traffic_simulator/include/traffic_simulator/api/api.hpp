@@ -61,15 +61,22 @@ public:
   : configuration_(configuration),
     node_parameters_(
       rclcpp::node_interfaces::get_node_parameters_interface(std::forward<NodeT>(node))),
-    clock_pub_(rclcpp::create_publisher<rosgraph_msgs::msg::Clock>(
-      node, "/clock", rclcpp::QoS(rclcpp::KeepLast(1)).best_effort(),
-      rclcpp::PublisherOptionsWithAllocator<AllocatorT>())),
+    /*
+       clock_source:=simulator (NEWSLabNTU fork, phase 015): the simulator side owns
+       /clock (acb, from CARLA), so this API creates no publisher on it at all; a second
+       publisher would interleave two time bases on one topic.
+    */
+    clock_pub_(
+      clockSource(node_parameters_) == ClockSource::simulator
+        ? nullptr
+        : rclcpp::create_publisher<rosgraph_msgs::msg::Clock>(
+            node, "/clock", rclcpp::QoS(rclcpp::KeepLast(1)).best_effort(),
+            rclcpp::PublisherOptionsWithAllocator<AllocatorT>())),
     debug_marker_pub_(rclcpp::create_publisher<visualization_msgs::msg::MarkerArray>(
       node, "debug_marker", rclcpp::QoS(100), rclcpp::PublisherOptionsWithAllocator<AllocatorT>())),
     clock_(
       common::getParameter<bool>(node_parameters_, "use_sim_time"),
-      std::forward<decltype(xs)>(xs)...,
-      common::getParameter<bool>(node_parameters_, "clock_follows_simulation_time", false)),
+      std::forward<decltype(xs)>(xs)..., clockSource(node_parameters_)),
     zeromq_client_(
       simulation_interface::protocol, configuration.simulator_host,
       common::getParameter<int>(node_parameters_, "port", 5555)),
@@ -91,6 +98,11 @@ public:
     entity_manager_ptr_->setTrafficLights(traffic_lights_ptr_);
     // Stamp traffic signal messages in the same time base as the /clock published here.
     traffic_lights_ptr_->setTimeSource([this]() { return clock_.getCurrentRosTime(); });
+    // Entity stamps (TF) are the node's wall clock upstream; with the simulator as the
+    // time source they join the signal stamps on the simulator's time base.
+    if (clock_.clock_source == ClockSource::simulator) {
+      entity_manager_ptr_->setTimeSource([this]() { return clock_.getCurrentRosTime(); });
+    }
     if (not init()) {
       throw common::SimulationError("Failed to initialize simulator by InitializeRequest");
     }
@@ -104,6 +116,16 @@ public:
   }
 
   auto init() -> bool;
+
+  // The clock_source parameter, with clock_follows_simulation_time folded in.
+  static auto clockSource(
+    const rclcpp::node_interfaces::NodeParametersInterface::SharedPtr & node_parameters)
+    -> ClockSource
+  {
+    return toClockSource(
+      common::getParameter<std::string>(node_parameters, "clock_source", "frames"),
+      common::getParameter<bool>(node_parameters, "clock_follows_simulation_time", false));
+  }
 
   auto setVerbose(const bool verbose) -> void;
 

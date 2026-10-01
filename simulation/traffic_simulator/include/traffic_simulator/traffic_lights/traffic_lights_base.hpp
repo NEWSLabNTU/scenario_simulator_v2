@@ -101,8 +101,10 @@ public:
 
   /*
      Where message stamps come from. Unset, they come from the node's clock. The API sets
-     it to its SimulationClock so stamps share the time base of the /clock it publishes,
-     which differs from the node's clock when clock_follows_simulation_time is true.
+     it to its SimulationClock so stamps share the time base of /clock: the one it
+     publishes (differs from the node's clock with clock_source follows_simulation_time),
+     or with clock_source simulator the simulator's reported time, which is what the
+     simulator side publishes on /clock.
   */
   auto setTimeSource(std::function<rclcpp::Time()> time_source) -> void
   {

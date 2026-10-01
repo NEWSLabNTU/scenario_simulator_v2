@@ -142,7 +142,7 @@ auto EntityManager::updateNpcLogic(
 auto EntityManager::updateLaneletMarker() const -> void
 {
   MarkerArray markers;
-  const auto stamp = clock_ptr_->now();
+  const auto stamp = now();
   for (const auto & marker_raw : markers_raw_.markers) {
     visualization_msgs::msg::Marker marker = marker_raw;
     marker.header.stamp = stamp;
@@ -178,7 +178,7 @@ auto EntityManager::broadcastEntityTransform() -> void
            * It is easier to create rviz config if the name "ego" is fixed,
            * so the frame_id "ego" is issued regardless of the name of the ego entity.
            */
-        .header(std_msgs::build<std_msgs::msg::Header>().stamp(clock_ptr_->now()).frame_id("ego"))
+        .header(std_msgs::build<std_msgs::msg::Header>().stamp(now()).frame_id("ego"))
         .pose(pose),
       true);
   }
@@ -199,7 +199,7 @@ auto EntityManager::broadcastEntityTransform() -> void
     broadcastTransform(
       geometry_msgs::build<geometry_msgs::msg::PoseStamped>()
         .header(
-          std_msgs::build<std_msgs::msg::Header>().stamp(clock_ptr_->now()).frame_id("entities"))
+          std_msgs::build<std_msgs::msg::Header>().stamp(now()).frame_id("entities"))
         .pose(pose),
       true);
   }

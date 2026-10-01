@@ -75,6 +75,7 @@ def launch_setup(context, *args, **kwargs):
     autoware_launch_file                        = LaunchConfiguration("autoware_launch_file",                        default=default_autoware_launch_file_of(architecture_type.perform(context)))
     autoware_launch_package                     = LaunchConfiguration("autoware_launch_package",                     default=default_autoware_launch_package_of(architecture_type.perform(context)))
     clock_follows_simulation_time               = LaunchConfiguration("clock_follows_simulation_time",               default=False)
+    clock_source                                = LaunchConfiguration("clock_source",                                default="frames")
     consider_acceleration_by_road_slope         = LaunchConfiguration("consider_acceleration_by_road_slope",         default=False)
     consider_pose_by_road_slope                 = LaunchConfiguration("consider_pose_by_road_slope",                 default=True)
     enable_perf                                 = LaunchConfiguration("enable_perf",                                 default=False)
@@ -117,6 +118,7 @@ def launch_setup(context, *args, **kwargs):
     print(f"autoware_launch_file                        := {autoware_launch_file.perform(context)}")
     print(f"autoware_launch_package                     := {autoware_launch_package.perform(context)}")
     print(f"clock_follows_simulation_time               := {clock_follows_simulation_time.perform(context)}")
+    print(f"clock_source                                := {clock_source.perform(context)}")
     print(f"consider_acceleration_by_road_slope         := {consider_acceleration_by_road_slope.perform(context)}")
     print(f"consider_pose_by_road_slope                 := {consider_pose_by_road_slope.perform(context)}")
     print(f"enable_perf                                 := {enable_perf.perform(context)}")
@@ -165,6 +167,7 @@ def launch_setup(context, *args, **kwargs):
             {"autoware_launch_file": autoware_launch_file},
             {"autoware_launch_package": autoware_launch_package},
             {"clock_follows_simulation_time": clock_follows_simulation_time},
+            {"clock_source": clock_source},
             {"consider_acceleration_by_road_slope": consider_acceleration_by_road_slope},
             {"consider_pose_by_road_slope": consider_pose_by_road_slope},
             {"initialize_duration": initialize_duration},
@@ -237,6 +240,7 @@ def launch_setup(context, *args, **kwargs):
         DeclareLaunchArgument("autoware_launch_file",                        default_value=autoware_launch_file                       ),
         DeclareLaunchArgument("autoware_launch_package",                     default_value=autoware_launch_package                    ),
         DeclareLaunchArgument("clock_follows_simulation_time",               default_value=clock_follows_simulation_time              ),
+        DeclareLaunchArgument("clock_source",                                default_value=clock_source                               ),
         DeclareLaunchArgument("consider_acceleration_by_road_slope",         default_value=consider_acceleration_by_road_slope        ),
         DeclareLaunchArgument("consider_pose_by_road_slope",                 default_value=consider_pose_by_road_slope                ),
         DeclareLaunchArgument("enable_perf",                                 default_value=enable_perf                                ),

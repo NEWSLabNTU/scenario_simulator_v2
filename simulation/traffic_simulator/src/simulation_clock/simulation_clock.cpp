@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <scenario_simulator_exception/exception.hpp>
 #include <string>
 #include <system_error>
@@ -42,20 +44,76 @@ auto lastPublishedTimePath() -> std::filesystem::path
 }
 }  // namespace
 
+auto toClockSource(const std::string & clock_source, bool clock_follows_simulation_time)
+  -> ClockSource
+{
+  if (clock_source == "frames") {
+    return clock_follows_simulation_time ? ClockSource::follows_simulation_time
+                                         : ClockSource::frames;
+  } else if (clock_source == "follows_simulation_time") {
+    return ClockSource::follows_simulation_time;
+  } else if (clock_source == "simulator") {
+    if (clock_follows_simulation_time) {
+      THROW_SIMULATION_ERROR(
+        "clock_source:=simulator and clock_follows_simulation_time:=true are mutually "
+        "exclusive: the first takes ROS time from the simulator, the second counts frames. "
+        "Set clock_follows_simulation_time:=false.");
+    }
+    return ClockSource::simulator;
+  } else {
+    THROW_SIMULATION_ERROR(
+      "Unknown clock_source ", std::quoted(clock_source),
+      ". Expected \"frames\", \"follows_simulation_time\" or \"simulator\".");
+  }
+}
+
 SimulationClock::SimulationClock(
-  bool use_sim_time, double realtime_factor, double frame_rate, bool follows_simulation_time)
+  bool use_sim_time, double realtime_factor, double frame_rate, ClockSource clock_source)
 : rclcpp::Clock(RCL_ROS_TIME),
   use_sim_time(use_sim_time),
-  follows_simulation_time(not use_sim_time and follows_simulation_time),
+  clock_source(clock_source),
+  follows_simulation_time(
+    not use_sim_time and clock_source == ClockSource::follows_simulation_time),
   realtime_factor(realtime_factor),
   frame_rate_(frame_rate),
   time_at_the_start_of_the_simulator_(makeStartTime())
 {
 }
 
+SimulationClock::SimulationClock(
+  bool use_sim_time, double realtime_factor, double frame_rate, bool follows_simulation_time)
+: SimulationClock(
+    use_sim_time, realtime_factor, frame_rate,
+    follows_simulation_time ? ClockSource::follows_simulation_time : ClockSource::frames)
+{
+}
+
+auto SimulationClock::setSimulatorTime(double seconds) -> void
+{
+  if (clock_source != ClockSource::simulator or not std::isfinite(seconds) or seconds <= 0.0) {
+    return;
+  }
+  const auto nanoseconds = static_cast<std::int64_t>(std::llround(seconds * 1e9));
+  if (not hasSimulatorTime()) {
+    RCLCPP_INFO_STREAM(
+      rclcpp::get_logger("simulation_clock"),
+      "ROS time now follows the simulator: first simulation_time " << seconds << " s.");
+  } else if (nanoseconds < simulator_time_nanoseconds_) {
+    RCLCPP_WARN_STREAM(
+      rclcpp::get_logger("simulation_clock"),
+      "The simulator reported simulation_time " << seconds << " s, earlier than the last ("
+                                                << simulator_time_nanoseconds_ / 1e9
+                                                << " s); taking it as reported.");
+  }
+  simulator_time_nanoseconds_ = nanoseconds;
+}
+
 auto SimulationClock::makeStartTime() -> rclcpp::Time
 {
-  if (use_sim_time) {
+  if (clock_source == ClockSource::simulator) {
+    // Unused for ROS time in this mode; and the $TMP file is neither read nor written.
+    return rclcpp::Time(now().nanoseconds(), RCL_ROS_TIME);
+  } else if (use_sim_time) {
     return rclcpp::Time(std::int64_t{0}, RCL_ROS_TIME);
   } else if (not follows_simulation_time) {
     return rclcpp::Time(now().nanoseconds(), RCL_ROS_TIME);
@@ -121,7 +179,20 @@ auto SimulationClock::getCurrentRosTimeAsMsg() -> rosgraph_msgs::msg::Clock
 
 auto SimulationClock::getCurrentRosTime() -> rclcpp::Time
 {
-  if (not use_sim_time and not follows_simulation_time) {
+  if (clock_source == ClockSource::simulator) {
+    if (hasSimulatorTime()) {
+      return rclcpp::Time(simulator_time_nanoseconds_, RCL_ROS_TIME);
+    } else {
+      if (not said_simulator_time_missing_) {
+        said_simulator_time_missing_ = true;
+        RCLCPP_WARN_STREAM(
+          rclcpp::get_logger("simulation_clock"),
+          "clock_source:=simulator, but the simulator has not reported a simulation_time yet; "
+          "using wall time until it does.");
+      }
+      return now();
+    }
+  } else if (not use_sim_time and not follows_simulation_time) {
     return now();
   } else {
     return time_at_the_start_of_the_simulator_ +

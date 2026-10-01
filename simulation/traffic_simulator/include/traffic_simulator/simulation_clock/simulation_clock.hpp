@@ -15,11 +15,42 @@
 #ifndef TRAFFIC_SIMULATOR__SIMULATION_CLOCK__SIMULATION_CLOCK_HPP_
 #define TRAFFIC_SIMULATOR__SIMULATION_CLOCK__SIMULATION_CLOCK_HPP_
 
+#include <cstdint>
+#include <limits>
 #include <rclcpp/rclcpp.hpp>
 #include <rosgraph_msgs/msg/clock.hpp>
+#include <string>
 
 namespace traffic_simulator
 {
+/*
+   Where ROS time comes from (NEWSLabNTU fork). Only getCurrentRosTime() -- and so the
+   /clock this simulator publishes, signal stamps and entity stamps -- depends on it;
+   scenario time (getCurrentScenarioTime, getCurrentSimulationTime) always counts frames
+   times step time, whatever the source.
+
+   frames                   Stock behaviour: wall time while use_sim_time is false,
+                            frames times step time from 0 while it is true.
+   follows_simulation_time  Phase 014: wall time at construction (or one step after the
+                            last value an earlier clock persisted under $TMP) plus frames
+                            times step time.
+   simulator                Phase 015: the last non-zero simulation_time the simulator
+                            reported in InitializeResponse / UpdateFrameResponse (CARLA's
+                            elapsed_seconds plus csb's episode epoch). Nothing is persisted
+                            and API publishes no /clock: the simulator side (acb) owns it.
+                            Wall time until the first value arrives, said once.
+*/
+enum class ClockSource { frames, follows_simulation_time, simulator };
+
+/*
+   The value of the clock_source parameter, with the 014 parameter folded in:
+   clock_follows_simulation_time:=true with clock_source left at "frames" means
+   follows_simulation_time. Throws on an unknown name, and on clock_source:=simulator
+   together with clock_follows_simulation_time:=true (the two are mutually exclusive).
+*/
+auto toClockSource(const std::string & clock_source, bool clock_follows_simulation_time)
+  -> ClockSource;
+
 class SimulationClock : rclcpp::Clock
 {
 public:
@@ -39,7 +70,20 @@ public:
   */
   explicit SimulationClock(
     bool use_sim_time, double realtime_factor, double frame_rate,
-    bool follows_simulation_time = false);
+    ClockSource clock_source = ClockSource::frames);
+
+  // 014 signature, kept for compatibility: true means ClockSource::follows_simulation_time.
+  explicit SimulationClock(
+    bool use_sim_time, double realtime_factor, double frame_rate, bool follows_simulation_time);
+
+  /*
+     Record the simulation_time of a simulator response (seconds). 0 means the
+     simulator does not know (a failed tick, or a backend without the field): the last
+     value is kept rather than going back. Ignored unless clock_source is simulator.
+  */
+  auto setSimulatorTime(double seconds) -> void;
+
+  auto hasSimulatorTime() const { return simulator_time_nanoseconds_ > 0; }
 
   auto getCurrentRosTime() -> rclcpp::Time;
 
@@ -62,6 +106,8 @@ public:
 
   const bool use_sim_time;
 
+  const ClockSource clock_source;
+
   const bool follows_simulation_time;
 
   double realtime_factor;
@@ -78,6 +124,10 @@ private:
   double seconds_since_the_simulator_started_ = 0.0;
 
   double seconds_at_the_start_of_the_scenario_ = std::numeric_limits<double>::quiet_NaN();
+
+  std::int64_t simulator_time_nanoseconds_ = 0;
+
+  bool said_simulator_time_missing_ = false;
 };
 }  // namespace traffic_simulator
 

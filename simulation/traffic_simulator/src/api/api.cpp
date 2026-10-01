@@ -28,7 +28,9 @@ auto API::init() -> bool
     request.set_step_time(clock_.getStepTime());
     simulation_interface::toProto(
       clock_.getCurrentRosTime(), *request.mutable_initialize_ros_time());
-    return zeromq_client_.call(request).result().success();
+    const auto response = zeromq_client_.call(request);
+    clock_.setSimulatorTime(response.simulation_time());
+    return response.result().success();
   } else {
     return true;
   }
@@ -76,7 +78,14 @@ auto API::updateTimeInSim() -> bool
   request.set_current_scenario_time(getCurrentTime());
   simulation_interface::toProto(
     clock_.getCurrentRosTimeAsMsg().clock, *request.mutable_current_ros_time());
-  return zeromq_client_.call(request).result().success();
+  const auto response = zeromq_client_.call(request);
+  /*
+     The time of the frame the simulator just stepped (0 = unknown, keeps the last).
+     Recorded before anything below in updateFrame() stamps -- entity TF, and the signal
+     publisher's timer, which runs after this frame -- so they all carry this frame's time.
+  */
+  clock_.setSimulatorTime(response.simulation_time());
+  return response.result().success();
 }
 
 auto API::updateEntitiesStatusInSim() -> bool
@@ -144,7 +153,9 @@ auto API::updateFrame() -> bool
 
   entity_manager_ptr_->broadcastEntityTransform();
   clock_.update();
-  clock_pub_->publish(clock_.getCurrentRosTimeAsMsg());
+  if (clock_pub_) {
+    clock_pub_->publish(clock_.getCurrentRosTimeAsMsg());
+  }
   debug_marker_pub_->publish(entity_manager_ptr_->makeDebugMarker());
   debug_marker_pub_->publish(traffic_controller_ptr_->makeDebugMarker());
   return true;

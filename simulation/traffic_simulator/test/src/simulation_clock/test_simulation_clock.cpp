@@ -136,7 +136,7 @@ TEST(SimulationClock, framesSourceIsWallTime)
   auto simulation_clock =
     traffic_simulator::SimulationClock(false, 1.0, 10.0, traffic_simulator::ClockSource::frames);
   simulation_clock.start();
-  simulation_clock.setSimulatorTime(5.0);
+  simulation_clock.setSimulatorTime(5'000'000'000);
   EXPECT_FALSE(simulation_clock.hasSimulatorTime());
 
   const auto wall_before = rclcpp::Clock(RCL_SYSTEM_TIME).now().nanoseconds();
@@ -198,7 +198,7 @@ TEST(SimulationClock, simulatorSource)
   EXPECT_LE(fallback, wall_after);
 
   // The first reported time (Initialize).
-  simulation_clock.setSimulatorTime(1234.5);
+  simulation_clock.setSimulatorTime(1'234'500'000'000);
   EXPECT_TRUE(simulation_clock.hasSimulatorTime());
   EXPECT_EQ(simulation_clock.getCurrentRosTime().nanoseconds(), 1234500000000);
   EXPECT_EQ(simulation_clock.getCurrentRosTime().get_clock_type(), RCL_ROS_TIME);
@@ -213,14 +213,27 @@ TEST(SimulationClock, simulatorSource)
   EXPECT_NEAR(simulation_clock.getCurrentScenarioTime(), 0.5, 1e-9);
 
   // An exact frame time (UpdateFrame).
-  simulation_clock.setSimulatorTime(1234.55);
+  simulation_clock.setSimulatorTime(1'234'550'000'000);
   EXPECT_EQ(simulation_clock.getCurrentRosTime().nanoseconds(), 1234550000000);
 
   // 0 means unknown: keep the last value rather than go back.
-  simulation_clock.setSimulatorTime(0.0);
+  simulation_clock.setSimulatorTime(0);
   EXPECT_EQ(simulation_clock.getCurrentRosTime().nanoseconds(), 1234550000000);
   EXPECT_EQ(simulation_clock.getCurrentRosTimeAsMsg().clock.sec, 1234);
   EXPECT_EQ(simulation_clock.getCurrentRosTimeAsMsg().clock.nanosec, 550000000u);
+
+  // Off-grid values, as CARLA's f32 step makes them, are kept to the nanosecond: the
+  // value is the simulator's integer, not a double converted here.
+  for (const std::int64_t ns : {std::int64_t{171'600'002'557}, std::int64_t{237'171'600'002'557},
+                                std::int64_t{1'790'611'998'049'999'872}}) {
+    simulation_clock.setSimulatorTime(ns);
+    EXPECT_EQ(simulation_clock.getCurrentRosTime().nanoseconds(), ns);
+    const auto msg = simulation_clock.getCurrentRosTimeAsMsg();
+    EXPECT_EQ(std::int64_t{msg.clock.sec} * 1'000'000'000 + msg.clock.nanosec, ns);
+  }
+  // Negative is "unknown" too.
+  simulation_clock.setSimulatorTime(-1);
+  EXPECT_EQ(simulation_clock.getCurrentRosTime().nanoseconds(), 1'790'611'998'049'999'872);
 }
 
 /**
@@ -240,7 +253,7 @@ TEST(SimulationClock, simulatorSourceDoesNotPersist)
 
   auto simulation_clock = traffic_simulator::SimulationClock(
     false, 1.0, 20.0, traffic_simulator::ClockSource::simulator);
-  simulation_clock.setSimulatorTime(10.0);
+  simulation_clock.setSimulatorTime(10'000'000'000);
   simulation_clock.start();
   simulation_clock.update();
 

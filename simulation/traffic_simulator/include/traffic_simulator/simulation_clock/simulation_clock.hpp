@@ -77,11 +77,12 @@ public:
     bool use_sim_time, double realtime_factor, double frame_rate, bool follows_simulation_time);
 
   /*
-     Record the simulation_time of a simulator response (seconds). 0 means the
-     simulator does not know (a failed tick, or a backend without the field): the last
-     value is kept rather than going back. Ignored unless clock_source is simulator.
+     Record the simulation_time_ns of a simulator response (integer nanoseconds, used as
+     is). 0 means the simulator does not know (a failed tick, or a backend without the
+     field): the last value is kept rather than going back. Ignored unless clock_source is
+     simulator.
   */
-  auto setSimulatorTime(double seconds) -> void;
+  auto setSimulatorTime(std::int64_t nanoseconds) -> void;
 
   auto hasSimulatorTime() const { return simulator_time_nanoseconds_ > 0; }
 

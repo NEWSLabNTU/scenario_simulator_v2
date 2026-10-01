@@ -88,22 +88,29 @@ SimulationClock::SimulationClock(
 {
 }
 
-auto SimulationClock::setSimulatorTime(double seconds) -> void
+auto SimulationClock::setSimulatorTime(std::int64_t nanoseconds) -> void
 {
-  if (clock_source != ClockSource::simulator or not std::isfinite(seconds) or seconds <= 0.0) {
+  /*
+     Taken as the integer the simulator sent, never through a double: the simulator (csb)
+     and the /clock publisher (acb) compute it with the same integer rule, and any
+     conversion here would round a share of frames 1 ns away from /clock.
+  */
+  if (clock_source != ClockSource::simulator or nanoseconds <= 0) {
     return;
   }
-  const auto nanoseconds = static_cast<std::int64_t>(std::llround(seconds * 1e9));
   if (not hasSimulatorTime()) {
     RCLCPP_INFO_STREAM(
       rclcpp::get_logger("simulation_clock"),
-      "ROS time now follows the simulator: first simulation_time " << seconds << " s.");
+      "ROS time now follows the simulator: first simulation_time "
+        << rclcpp::Time(nanoseconds, RCL_ROS_TIME).seconds() << " s (" << nanoseconds
+        << " ns).");
   } else if (nanoseconds < simulator_time_nanoseconds_) {
     RCLCPP_WARN_STREAM(
       rclcpp::get_logger("simulation_clock"),
-      "The simulator reported simulation_time " << seconds << " s, earlier than the last ("
-                                                << simulator_time_nanoseconds_ / 1e9
-                                                << " s); taking it as reported.");
+      "The simulator reported simulation_time " << nanoseconds
+                                                << " ns, earlier than the last ("
+                                                << simulator_time_nanoseconds_
+                                                << " ns); taking it as reported.");
   }
   simulator_time_nanoseconds_ = nanoseconds;
 }

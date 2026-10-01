@@ -29,7 +29,7 @@ auto API::init() -> bool
     simulation_interface::toProto(
       clock_.getCurrentRosTime(), *request.mutable_initialize_ros_time());
     const auto response = zeromq_client_.call(request);
-    clock_.setSimulatorTime(response.simulation_time());
+    clock_.setSimulatorTime(response.simulation_time_ns());
     return response.result().success();
   } else {
     return true;
@@ -84,7 +84,7 @@ auto API::updateTimeInSim() -> bool
      Recorded before anything below in updateFrame() stamps -- entity TF, and the signal
      publisher's timer, which runs after this frame -- so they all carry this frame's time.
   */
-  clock_.setSimulatorTime(response.simulation_time());
+  clock_.setSimulatorTime(response.simulation_time_ns());
   return response.result().success();
 }
 

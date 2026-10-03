@@ -448,7 +448,19 @@ auto FieldOperatorApplication::initialize(const geometry_msgs::msg::Pose & initi
                 std::make_shared<autoware_adapi_v1_msgs::srv::InitializeLocalization::Request>();
               request->pose.push_back([&]() {
                 auto initial_pose_stamped = geometry_msgs::msg::PoseWithCovarianceStamped();
-                initial_pose_stamped.header.stamp = get_clock()->now();
+                /*
+                   Autoware's time base, not this node's: the concealer runs on wall
+                   time while Autoware runs on the simulator's /clock, so now() put
+                   the initial pose ~1.79e9 s away from every stamp Autoware holds.
+                   The newest scan, just waited for above, is in Autoware's time.
+                */
+                if (const auto scan_stamp = latest_localization_scan_stamp.load();
+                    scan_stamp > 0) {
+                  initial_pose_stamped.header.stamp = rclcpp::Time(scan_stamp, RCL_ROS_TIME);
+                } else {
+                  // No scan ever arrived (warned above); nothing better is known.
+                  initial_pose_stamped.header.stamp = get_clock()->now();
+                }
                 initial_pose_stamped.header.frame_id = "map";
                 initial_pose_stamped.pose.pose = initial_pose;
                 return initial_pose_stamped;

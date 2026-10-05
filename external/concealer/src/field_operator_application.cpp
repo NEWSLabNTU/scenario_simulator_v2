@@ -893,8 +893,22 @@ auto FieldOperatorApplication::getLegacyAutowareState() const -> LegacyAutowareS
 #if __has_include(<autoware_adapi_v1_msgs/msg/localization_initialization_state.hpp>) and \
     __has_include(<autoware_adapi_v1_msgs/msg/route_state.hpp>) and \
     __has_include(<autoware_adapi_v1_msgs/msg/operation_mode_state.hpp>)
+  /*
+     ARRIVED_GOAL is reported for 2 s after the route state's stamp, which is in Autoware's
+     time base. This node runs on wall time, so with Autoware on a simulator /clock that does
+     not track wall time now() is ~1.79e9 s past every route stamp and ARRIVED_GOAL is never
+     reported. Measure against the newest localization scan instead, as the initial pose
+     does; fall back to now() when no scan has arrived (unmanaged, or not yet).
+  */
+  const auto autoware_now = [this]() {
+    if (const auto scan_stamp = latest_localization_scan_stamp.load(); scan_stamp > 0) {
+      return rclcpp::Time(scan_stamp, RCL_ROS_TIME);
+    } else {
+      return now();
+    }
+  }();
   return LegacyAutowareState(
-    getLocalizationState(), getRouteState(), getOperationModeState(), now());
+    getLocalizationState(), getRouteState(), getOperationModeState(), autoware_now);
 #else
   return LegacyAutowareState(getAutowareState());
 #endif

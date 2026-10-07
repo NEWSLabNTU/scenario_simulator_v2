@@ -67,7 +67,21 @@ public:
     }
   }
 
-  static auto update() -> void { core->updateFrame(); }
+  /*
+     A frame the simulator reports as failed -- an entity it could not move, a tick that did
+     not happen -- is the end of the scenario. Ignoring it retried the frame forever: time
+     stops advancing, so not even a SimulationTimeCondition timeout fires, and a simulator
+     that lost its world kept the scenario alive indefinitely. The simulator's log says why.
+  */
+  static auto update() -> void
+  {
+    if (not core->updateFrame()) {
+      throw SimulationError(
+        "The simulator reported a failed frame (UpdateEntityStatus, UpdateTrafficLights or "
+        "UpdateFrame); see its log for the cause. Ending the scenario instead of retrying a "
+        "frame that cannot advance time.");
+    }
+  }
 
   class CoordinateSystemConversion
   {

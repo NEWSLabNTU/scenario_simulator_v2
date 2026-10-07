@@ -123,6 +123,18 @@ auto MultiClient::call(const simulation_api_schema::UpdateStepTimeRequest & requ
   }
 }
 
+auto MultiClient::call(const simulation_api_schema::UpdateEntityGoalRequest & request)
+  -> simulation_api_schema::UpdateEntityGoalResponse
+{
+  if (is_running) {
+    simulation_api_schema::SimulationRequest sim_request;
+    *sim_request.mutable_update_entity_goal() = request;
+    return call(sim_request).update_entity_goal();
+  } else {
+    return {};
+  }
+}
+
 auto MultiClient::call(const simulation_api_schema::SpawnVehicleEntityRequest & request)
   -> simulation_api_schema::SpawnVehicleEntityResponse
 {

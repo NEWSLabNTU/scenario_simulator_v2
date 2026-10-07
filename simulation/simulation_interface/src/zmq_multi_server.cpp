@@ -87,6 +87,15 @@ void MultiServer::poll()
         *sim_response.mutable_update_step_time() =
           std::get<UpdateStepTime>(functions_)(proto.update_step_time());
         break;
+      case simulation_api_schema::SimulationRequest::RequestCase::kUpdateEntityGoal: {
+        /*
+           Only for entities a simulator drives itself ("simulator_autopilot"). A server
+           built on MultiServer drives none, so it would have refused such a spawn; any
+           goal it receives is for nothing it moves, and is acknowledged.
+        */
+        sim_response.mutable_update_entity_goal()->mutable_result()->set_success(true);
+        break;
+      }
       case simulation_api_schema::SimulationRequest::RequestCase::REQUEST_NOT_SET: {
         THROW_SIMULATION_ERROR("No case defined for oneof in SimulationRequest message");
       }

@@ -122,6 +122,33 @@ auto API::updateEntitiesStatusInSim() -> bool
   return false;
 }
 
+auto API::updateEntityGoalsInSim() -> bool
+{
+  /// @note Goals requested by this frame's actions reach the simulator before its status.
+  for (const auto & entity_name : entity_manager_ptr_->getEntityNames()) {
+    auto & entity = entity_manager_ptr_->getEntity(entity_name);
+    if (not entity.is<entity::SimulatorDrivenVehicleEntity>()) {
+      continue;
+    }
+    for (const auto & update : entity.as<entity::SimulatorDrivenVehicleEntity>().takeGoalUpdates()) {
+      simulation_api_schema::UpdateEntityGoalRequest request;
+      request.set_name(entity_name);
+      for (const auto & waypoint : update.waypoints) {
+        simulation_interface::toProto(waypoint, *request.add_waypoints());
+      }
+      request.set_clear(update.clear);
+      request.set_has_target_speed(update.target_speed.has_value());
+      request.set_target_speed(update.target_speed.value_or(0.0));
+      if (const auto response = zeromq_client_.call(request); not response.result().success()) {
+        THROW_SIMULATION_ERROR(
+          "The simulator refused a goal for ", std::quoted(entity_name), ": ",
+          response.result().description());
+      }
+    }
+  }
+  return true;
+}
+
 auto API::updateTrafficLightsInSim() -> bool
 {
   if (traffic_lights_ptr_->isAnyTrafficLightChanged()) {
@@ -136,6 +163,10 @@ auto API::updateFrame() -> bool
 {
   if (configuration_.standalone_mode && entity_manager_ptr_->isAnyEgoSpawned()) {
     THROW_SEMANTIC_ERROR("Ego simulation is no longer supported in standalone mode");
+  }
+
+  if (not configuration_.standalone_mode && !updateEntityGoalsInSim()) {
+    return false;
   }
 
   if (!updateEntitiesStatusInSim()) {

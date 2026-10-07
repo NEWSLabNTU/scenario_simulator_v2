@@ -38,6 +38,11 @@ struct VehicleBehavior : public entity::VehicleEntity::BuiltinBehavior
     static const std::string name = "Autoware";
     return name;
   }
+  /// The simulator drives the entity with its own driver (SimulatorDrivenVehicleEntity).
+  static auto simulatorAutopilot() noexcept -> const std::string &
+  {
+    return entity::SimulatorDrivenVehicleEntity::behaviorName();
+  }
 };
 
 struct PedestrianBehavior : public entity::PedestrianEntity::BuiltinBehavior
@@ -162,6 +167,9 @@ public:
         if (behavior == VehicleBehavior::autoware()) {
           return entity_manager_ptr_->spawnEntity<entity::EgoEntity>(
             name, pose, parameters, getCurrentTime(), configuration_, node_parameters_);
+        } else if (behavior == VehicleBehavior::simulatorAutopilot()) {
+          return entity_manager_ptr_->spawnEntity<entity::SimulatorDrivenVehicleEntity>(
+            name, pose, parameters, getCurrentTime());
         } else {
           return entity_manager_ptr_->spawnEntity<entity::VehicleEntity>(
             name, pose, parameters, getCurrentTime(),
@@ -192,6 +200,7 @@ public:
         if constexpr (std::is_same_v<ParamsType, VehicleParameters>) {
           simulation_api_schema::SpawnVehicleEntityRequest request;
           request.set_is_ego(behavior == VehicleBehavior::autoware());
+          request.set_behavior(behavior);
           /// @todo Should be filled from function API
           request.set_initial_speed(0.0);
           return prepare_and_send_request(entity, request);
@@ -315,6 +324,8 @@ public:
 
 private:
   auto updateTimeInSim() -> bool;
+
+  auto updateEntityGoalsInSim() -> bool;
 
   auto updateEntitiesStatusInSim() -> bool;
 

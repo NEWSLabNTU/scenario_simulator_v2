@@ -15,9 +15,22 @@
 #include <rclcpp/utilities.hpp>
 #include <simulation_interface/conversions.hpp>
 #include <simulation_interface/zmq_multi_client.hpp>
+#include <cstdlib>
 #include <string>
 namespace zeromq
 {
+namespace
+{
+auto responseTimeoutMilliseconds() -> int
+{
+  if (const auto * value = std::getenv("SIMULATOR_RESPONSE_TIMEOUT"); value and *value) {
+    return static_cast<int>(std::stod(value) * 1000);
+  } else {
+    return 420 * 1000;
+  }
+}
+}  // namespace
+
 MultiClient::MultiClient(
   const simulation_interface::TransportProtocol & protocol, const std::string & hostname,
   const unsigned int socket_port)
@@ -25,9 +38,21 @@ MultiClient::MultiClient(
   hostname(hostname),
   context_(1),
   type_(zmq::socket_type::req),
+  endpoint_(simulation_interface::getEndPoint(protocol, hostname, socket_port)),
+  receive_timeout_ms_(responseTimeoutMilliseconds()),
   socket_(context_, type_)
 {
-  socket_.connect(simulation_interface::getEndPoint(protocol, hostname, socket_port));
+  connect();
+}
+
+void MultiClient::connect()
+{
+  if (receive_timeout_ms_ > 0) {
+    socket_.set(zmq::sockopt::rcvtimeo, receive_timeout_ms_);
+  }
+  // Do not hold a dead peer's unsent requests on close.
+  socket_.set(zmq::sockopt::linger, 0);
+  socket_.connect(endpoint_);
 }
 
 void MultiClient::closeConnection()
@@ -46,7 +71,19 @@ auto MultiClient::call(const simulation_api_schema::SimulationRequest & req)
   zmq::message_t message = toZMQ(req);
   socket_.send(message, zmq::send_flags::none);
   zmq::message_t buffer;
-  socket_.recv(buffer, zmq::recv_flags::none);
+  if (not socket_.recv(buffer, zmq::recv_flags::none)) {
+    /*
+       A REQ socket whose reply never came cannot send again, so replace it: whatever
+       handles the error -- or the next scenario in this process -- gets a usable client.
+    */
+    socket_.close();
+    socket_ = zmq::socket_t(context_, type_);
+    connect();
+    THROW_SIMULATION_ERROR(
+      "No response from the simulator at ", endpoint_, " within ", receive_timeout_ms_ / 1000.0,
+      " s (SIMULATOR_RESPONSE_TIMEOUT). It may have crashed or hung with this request "
+      "outstanding.");
+  }
   return toProto<simulation_api_schema::SimulationResponse>(buffer);
 }
 

@@ -16,6 +16,7 @@
 # limitations under the License.
 
 
+import shutil
 import os
 import rclpy
 import time
@@ -43,7 +44,15 @@ def convert_scenario_to_xosc(scenario: Scenario, output_directory: Path):
     result = []
 
     if scenario.path.suffix == ".xosc":
-        result.append(scenario)
+        # Hand the preprocessor a copy in the output directory: it moves the file it is
+        # given into a sibling raw/ directory and writes its re-serialized version in its
+        # place (openscenario_preprocessor.cpp), which rewrote -- and stripped the comments
+        # from -- the user's own scenario file.
+        copy_directory = output_directory / scenario.path.stem
+        copy_directory.mkdir(parents=True, exist_ok=True)
+        copy = copy_directory / scenario.path.name
+        shutil.copyfile(scenario.path, copy)
+        result.append(Scenario(copy, scenario.frame_rate))
 
     else:  # == '.yaml' or == '.yml'
         for path in convert(scenario.path, output_directory / scenario.path.stem, False):

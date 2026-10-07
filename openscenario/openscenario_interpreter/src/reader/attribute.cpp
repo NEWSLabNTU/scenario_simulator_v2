@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstdlib>
 #include <openscenario_interpreter/reader/attribute.hpp>
 #include <openscenario_interpreter/scope.hpp>
 #include <openscenario_interpreter/syntax/rule.hpp>
@@ -48,6 +49,23 @@ auto substitute(const std::string & attribute, const Scope & scope) -> String
     }
   };
 
+  // $(env NAME) or $(env NAME default), as in ROS 2 launch XML. Lets a scenario name a map
+  // directory by a variable the user sets, instead of a path inside some package.
+  auto env = [](auto && arguments, const auto &) {
+    const auto separator = arguments.find_first_of(" \t");
+    const auto name = arguments.substr(0, separator);
+    if (const auto value = std::getenv(name.c_str()); value) {
+      return String(value);
+    } else if (separator != std::string::npos) {
+      const auto start = arguments.find_first_not_of(" \t", separator);
+      return start == std::string::npos ? String() : String(arguments.substr(start));
+    } else {
+      throw SyntaxError(
+        "The environment variable ", std::quoted(name), " named in `$(env ", arguments,
+        ")` is not set, and no default was given.");
+    }
+  };
+
   auto var = [](auto && name, const auto & scope) {
     // TODO: Return the value of the launch configuration variable instead of the OpenSCENARIO parameter.
     if (const auto found = scope.ref(name); found) {
@@ -62,7 +80,7 @@ auto substitute(const std::string & attribute, const Scope & scope) -> String
     std::string, std::function<std::string(const std::string &, const Scope &)> >
     substitutions{
       {"dirname", dirname},
-      // TODO {"env", env},
+      {"env", env},
       // TODO {"eval", eval},
       // TODO {"exec-in-package", exec_in_package},
       // TODO {"find-exec", find_exec},

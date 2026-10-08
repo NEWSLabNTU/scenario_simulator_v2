@@ -194,7 +194,16 @@ FieldOperatorApplication::FieldOperatorApplication(const pid_t pid, const bool m
          Ideally, we should check the operation state and only request if it's not already in STOP mode.
          TODO: Implement state check to avoid unnecessary requests (when LegacyAutowareState is being refactored).
       */
-      requestChangeToStop(std::make_shared<ChangeOperationMode::Request>(), 30);
+      /*
+         Wait for the service within the Autoware startup budget (initialize_duration), not
+         the default 180 s: an Autoware that is still starting -- or, behind an agent relay,
+         a vehicle side started after the scenario -- offers it only once it is up, and on a
+         loaded host that takes longer than 180 s.
+      */
+      const auto budget = std::max(
+        std::chrono::seconds(180), std::chrono::duration_cast<std::chrono::seconds>(
+                                     time_limit - std::chrono::steady_clock::now()));
+      requestChangeToStop(std::make_shared<ChangeOperationMode::Request>(), 30, budget);
     });
   }
 }

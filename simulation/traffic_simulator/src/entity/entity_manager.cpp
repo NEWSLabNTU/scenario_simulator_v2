@@ -340,11 +340,12 @@ auto EntityManager::resetBehaviorPlugin(
       "You cannot reset behavior plugin of MiscObjectEntity.");
   } else if (
     reference_entity.is<SimulatorDrivenVehicleEntity>() or
-    behavior_plugin_name == SimulatorDrivenVehicleEntity::behaviorName()) {
+    SimulatorDrivenVehicleEntity::drives(behavior_plugin_name)) {
     /// @note The simulator learns who drives an entity only at its spawn.
     THROW_SEMANTIC_ERROR(
       "Entity ", std::quoted(name), ": switching to or from controller ",
-      SimulatorDrivenVehicleEntity::behaviorName(), " after the spawn is not supported.");
+      SimulatorDrivenVehicleEntity::behaviorName(), " or ",
+      SimulatorDrivenVehicleEntity::agentBehaviorName(), " after the spawn is not supported.");
   } else if (reference_entity.is<VehicleEntity>()) {
     const auto parameters = reference_entity.as<VehicleEntity>().getParameters();
     despawnEntity(name);

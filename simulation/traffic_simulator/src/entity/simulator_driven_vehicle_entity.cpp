@@ -23,8 +23,8 @@ namespace entity
 {
 SimulatorDrivenVehicleEntity::SimulatorDrivenVehicleEntity(
   const std::string & name, const CanonicalizedEntityStatus & entity_status,
-  const traffic_simulator_msgs::msg::VehicleParameters & parameters)
-: VehicleEntity(name, entity_status, parameters, BuiltinBehavior::doNothing())
+  const traffic_simulator_msgs::msg::VehicleParameters & parameters, const std::string & behavior)
+: VehicleEntity(name, entity_status, parameters, BuiltinBehavior::doNothing()), behavior_(behavior)
 {
 }
 
@@ -42,7 +42,7 @@ void SimulatorDrivenVehicleEntity::cancelRequest()
 
 auto SimulatorDrivenVehicleEntity::getCurrentAction() const -> std::string
 {
-  return behaviorName();
+  return behavior_;
 }
 
 auto SimulatorDrivenVehicleEntity::onUpdate(const double current_time, const double step_time)
@@ -98,16 +98,16 @@ auto SimulatorDrivenVehicleEntity::requestFollowTrajectory(
 {
   THROW_SEMANTIC_ERROR(
     "FollowTrajectoryAction was requested for ", std::quoted(name),
-    ", which is driven by the simulator (controller simulator_autopilot). Use the default "
-    "controller for scripted trajectories.");
+    ", which is driven by its controller ", behavior_,
+    ". Use the default controller for scripted trajectories.");
 }
 
 auto SimulatorDrivenVehicleEntity::requestLaneChange(const lanelet::Id) -> void
 {
   THROW_SEMANTIC_ERROR(
     "LaneChangeAction was requested for ", std::quoted(name),
-    ", which is driven by the simulator (controller simulator_autopilot); its driver decides "
-    "lane changes. Use the default controller for scripted lane changes.");
+    ", which is driven by its controller ", behavior_,
+    "; its driver decides lane changes. Use the default controller for scripted lane changes.");
 }
 
 auto SimulatorDrivenVehicleEntity::requestLaneChange(const lane_change::Parameter &) -> void
@@ -142,8 +142,8 @@ void SimulatorDrivenVehicleEntity::requestSpeedChange(
 {
   THROW_SEMANTIC_ERROR(
     "A relative SpeedAction was requested for ", std::quoted(name),
-    ", which is driven by the simulator (controller simulator_autopilot). Only an absolute "
-    "target speed is supported.");
+    ", which is driven by its controller ", behavior_,
+    ". Only an absolute target speed is supported.");
 }
 }  // namespace entity
 }  // namespace traffic_simulator

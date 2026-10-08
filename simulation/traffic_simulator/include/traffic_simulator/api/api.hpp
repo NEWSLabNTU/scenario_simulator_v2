@@ -43,6 +43,11 @@ struct VehicleBehavior : public entity::VehicleEntity::BuiltinBehavior
   {
     return entity::SimulatorDrivenVehicleEntity::behaviorName();
   }
+  /// An agent registered under the entity's name drives it (SimulatorDrivenVehicleEntity).
+  static auto agent() noexcept -> const std::string &
+  {
+    return entity::SimulatorDrivenVehicleEntity::agentBehaviorName();
+  }
 };
 
 struct PedestrianBehavior : public entity::PedestrianEntity::BuiltinBehavior
@@ -167,9 +172,9 @@ public:
         if (behavior == VehicleBehavior::autoware()) {
           return entity_manager_ptr_->spawnEntity<entity::EgoEntity>(
             name, pose, parameters, getCurrentTime(), configuration_, node_parameters_);
-        } else if (behavior == VehicleBehavior::simulatorAutopilot()) {
+        } else if (entity::SimulatorDrivenVehicleEntity::drives(behavior)) {
           return entity_manager_ptr_->spawnEntity<entity::SimulatorDrivenVehicleEntity>(
-            name, pose, parameters, getCurrentTime());
+            name, pose, parameters, getCurrentTime(), behavior);
         } else {
           return entity_manager_ptr_->spawnEntity<entity::VehicleEntity>(
             name, pose, parameters, getCurrentTime(),

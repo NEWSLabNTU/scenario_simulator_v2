@@ -26,8 +26,11 @@ namespace traffic_simulator
 namespace entity
 {
 /**
- * A vehicle the simulator drives with its own driver (controller "simulator_autopilot"; for
- * CARLA, Traffic Manager). traffic_simulator does not move it: it runs no behavior, adopts
+ * A vehicle the simulator side drives, not traffic_simulator: controller "simulator_autopilot"
+ * (the simulator's own driver; for CARLA, Traffic Manager) or "agent" (an autopilot that
+ * registered with the simulator side under the entity's name, e.g. a full Autoware reached
+ * through the agent relay). The two differ only in what the simulator does with the entity;
+ * here they are the same. traffic_simulator does not move it: it runs no behavior, adopts
  * the pose the simulator returns in UpdateEntityStatus (as for every non-ego entity), and
  * turns the scenario's goal, route and absolute speed requests into GoalUpdates, which
  * API::updateFrame sends to the simulator as UpdateEntityGoal before the frame's
@@ -50,9 +53,22 @@ public:
     return name;
   }
 
+  static auto agentBehaviorName() noexcept -> const std::string &
+  {
+    static const std::string name = "agent";
+    return name;
+  }
+
+  /// True for the controller names this entity type stands for.
+  static auto drives(const std::string & behavior) noexcept -> bool
+  {
+    return behavior == behaviorName() or behavior == agentBehaviorName();
+  }
+
   explicit SimulatorDrivenVehicleEntity(
     const std::string & name, const CanonicalizedEntityStatus &,
-    const traffic_simulator_msgs::msg::VehicleParameters &);
+    const traffic_simulator_msgs::msg::VehicleParameters &,
+    const std::string & behavior = behaviorName());
 
   ~SimulatorDrivenVehicleEntity() override = default;
 
@@ -96,6 +112,8 @@ public:
     const speed_change::RelativeTargetSpeed &, const bool continuous) override;
 
 private:
+  const std::string behavior_;
+
   std::vector<GoalUpdate> goal_updates_;
 };
 }  // namespace entity

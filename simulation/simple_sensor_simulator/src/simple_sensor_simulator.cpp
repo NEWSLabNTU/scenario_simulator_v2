@@ -194,12 +194,14 @@ auto ScenarioSimulator::spawnVehicleEntity(
   const simulation_api_schema::SpawnVehicleEntityRequest & req)
   -> simulation_api_schema::SpawnVehicleEntityResponse
 {
-  if (req.behavior() == "simulator_autopilot") {
-    /// @note This simulator has no driver of its own; such an entity would never move.
+  if (req.behavior() == "simulator_autopilot" or req.behavior() == "agent") {
+    /// @note This simulator has no driver of its own and no agents; such an entity would
+    /// never move.
     auto res = simulation_api_schema::SpawnVehicleEntityResponse();
     res.mutable_result()->set_success(false);
     res.mutable_result()->set_description(
-      "simple_sensor_simulator cannot drive an entity itself (simulator_autopilot)");
+      "simple_sensor_simulator cannot drive an entity itself (controller " + req.behavior() +
+      ")");
     return res;
   }
   if (ego_vehicles_.size() != 0 && req.is_ego()) {

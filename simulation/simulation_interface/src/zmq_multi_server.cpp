@@ -89,7 +89,7 @@ void MultiServer::poll()
         break;
       case simulation_api_schema::SimulationRequest::RequestCase::kUpdateEntityGoal: {
         /*
-           Only for entities a simulator drives itself ("simulator_autopilot"). A server
+           Only for entities a simulator drives itself ("simulator_autopilot", "agent"). A server
            built on MultiServer drives none, so it would have refused such a spawn; any
            goal it receives is for nothing it moves, and is acknowledged.
         */

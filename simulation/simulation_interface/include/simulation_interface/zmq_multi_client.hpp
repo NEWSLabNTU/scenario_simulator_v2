@@ -96,12 +96,21 @@ private:
   const zmq::socket_type type_;
   const std::string endpoint_;
   /*
-     How long to wait for each response, in ms (SIMULATOR_RESPONSE_TIMEOUT, seconds,
-     default 420; 0 waits forever as before). Without a bound, a simulator that dies with
-     a request outstanding leaves the scenario blocked in recv until it is killed by hand:
-     a restarted simulator never answers a request sent to its predecessor.
+     How long to wait for a response, in ms. Without a bound, a simulator that dies with a
+     request outstanding leaves the scenario blocked in recv until it is killed by hand: a
+     restarted simulator never answers a request sent to its predecessor. 0 waits forever.
+
+     Initialize gets its own, longer bound (SIMULATOR_INITIALIZE_TIMEOUT, seconds, default
+     300): it is the one request that may wait for a restarting simulator and load another
+     map. Every other request (SIMULATOR_RESPONSE_TIMEOUT, seconds, default 90) is a frame,
+     a spawn or a despawn, which a healthy simulator answers in milliseconds.
   */
   const int receive_timeout_ms_;
+  const int initialize_timeout_ms_;
+  int current_timeout_ms_ = -2;  // what the socket is set to; -2 = not yet set
+
+  auto call(const simulation_api_schema::SimulationRequest &, int timeout_ms)
+    -> simulation_api_schema::SimulationResponse;
   zmq::socket_t socket_;
 
   void connect();

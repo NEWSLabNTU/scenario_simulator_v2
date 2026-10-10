@@ -118,7 +118,14 @@ public:
 
   auto operator()(
     const typename T::Request::SharedPtr & request, std::size_t attempts_count,
-    std::chrono::seconds availability_timeout = std::chrono::seconds(180))
+    /*
+       Upstream waits 180 s for every service, sized for an Autoware launched with the
+       scenario. Here the ego's Autoware is up before the scenario starts and its services
+       reach this process through the agent relay, which offers them while a vehicle
+       agent is registered and is discovered in a second or two; a service still missing
+       after 30 s is not coming. Waits that must cover startup pass their own budget.
+    */
+    std::chrono::seconds availability_timeout = std::chrono::seconds(30))
   {
     const auto availability_deadline = std::chrono::steady_clock::now() + availability_timeout;
 

@@ -21,12 +21,24 @@ namespace zeromq
 {
 namespace
 {
-auto responseTimeoutMilliseconds() -> int
+/*
+   Seconds from the environment variable `name`, else `default_seconds`, as milliseconds.
+
+   SIMULATOR_RESPONSE_TIMEOUT (default 90 s) bounds every request but Initialize: a frame
+   that ticks a server which stopped answering fails on carla-scenario-bridge's own 30 s
+   RPC timeout (plus a 10 s apply_settings), so 90 s is twice that, and a simulator that
+   died mid-scenario is reported in a minute and a half rather than seven minutes.
+
+   SIMULATOR_INITIALIZE_TIMEOUT (default 300 s) bounds Initialize, which may wait for a
+   restarting CARLA (bridge carla.reconnect_wait_seconds, 120) and then load another town
+   (up to the bridge's 120 s map-load RPC timeout; 44 s measured for Town02 at Epic).
+*/
+auto timeoutMilliseconds(const char * name, double default_seconds) -> int
 {
-  if (const auto * value = std::getenv("SIMULATOR_RESPONSE_TIMEOUT"); value and *value) {
+  if (const auto * value = std::getenv(name); value and *value) {
     return static_cast<int>(std::stod(value) * 1000);
   } else {
-    return 420 * 1000;
+    return static_cast<int>(default_seconds * 1000);
   }
 }
 }  // namespace
@@ -39,7 +51,8 @@ MultiClient::MultiClient(
   context_(1),
   type_(zmq::socket_type::req),
   endpoint_(simulation_interface::getEndPoint(protocol, hostname, socket_port)),
-  receive_timeout_ms_(responseTimeoutMilliseconds()),
+  receive_timeout_ms_(timeoutMilliseconds("SIMULATOR_RESPONSE_TIMEOUT", 90)),
+  initialize_timeout_ms_(timeoutMilliseconds("SIMULATOR_INITIALIZE_TIMEOUT", 300)),
   socket_(context_, type_)
 {
   connect();
@@ -47,9 +60,7 @@ MultiClient::MultiClient(
 
 void MultiClient::connect()
 {
-  if (receive_timeout_ms_ > 0) {
-    socket_.set(zmq::sockopt::rcvtimeo, receive_timeout_ms_);
-  }
+  current_timeout_ms_ = -2;
   // Do not hold a dead peer's unsent requests on close.
   socket_.set(zmq::sockopt::linger, 0);
   socket_.connect(endpoint_);
@@ -68,6 +79,16 @@ MultiClient::~MultiClient() { closeConnection(); }
 auto MultiClient::call(const simulation_api_schema::SimulationRequest & req)
   -> simulation_api_schema::SimulationResponse
 {
+  return call(req, req.has_initialize() ? initialize_timeout_ms_ : receive_timeout_ms_);
+}
+
+auto MultiClient::call(const simulation_api_schema::SimulationRequest & req, int timeout_ms)
+  -> simulation_api_schema::SimulationResponse
+{
+  if (timeout_ms != current_timeout_ms_) {
+    socket_.set(zmq::sockopt::rcvtimeo, timeout_ms > 0 ? timeout_ms : -1);
+    current_timeout_ms_ = timeout_ms;
+  }
   zmq::message_t message = toZMQ(req);
   socket_.send(message, zmq::send_flags::none);
   zmq::message_t buffer;
@@ -80,9 +101,9 @@ auto MultiClient::call(const simulation_api_schema::SimulationRequest & req)
     socket_ = zmq::socket_t(context_, type_);
     connect();
     THROW_SIMULATION_ERROR(
-      "No response from the simulator at ", endpoint_, " within ", receive_timeout_ms_ / 1000.0,
-      " s (SIMULATOR_RESPONSE_TIMEOUT). It may have crashed or hung with this request "
-      "outstanding.");
+      "No response from the simulator at ", endpoint_, " within ", timeout_ms / 1000.0, " s (",
+      req.has_initialize() ? "SIMULATOR_INITIALIZE_TIMEOUT" : "SIMULATOR_RESPONSE_TIMEOUT",
+      "). It may have crashed or hung with this request outstanding, or not be running.");
   }
   return toProto<simulation_api_schema::SimulationResponse>(buffer);
 }

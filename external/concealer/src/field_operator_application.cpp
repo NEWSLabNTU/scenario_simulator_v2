@@ -195,15 +195,24 @@ FieldOperatorApplication::FieldOperatorApplication(const pid_t pid, const bool m
          TODO: Implement state check to avoid unnecessary requests (when LegacyAutowareState is being refactored).
       */
       /*
-         Wait for the service within the Autoware startup budget (initialize_duration), not
-         the default 180 s: an Autoware that is still starting -- or, behind an agent relay,
-         a vehicle side started after the scenario -- offers it only once it is up, and on a
-         loaded host that takes longer than 180 s.
+         Wait for the service within the Autoware startup budget (initialize_duration) and
+         no longer: an Autoware that is still starting -- or, behind an agent relay, a
+         vehicle side started after the scenario -- offers it only once it is up. The relay
+         offers it exactly while a vehicle agent is registered, so running out of budget
+         here means none is, and the error says so.
       */
       const auto budget = std::max(
-        std::chrono::seconds(180), std::chrono::duration_cast<std::chrono::seconds>(
-                                     time_limit - std::chrono::steady_clock::now()));
-      requestChangeToStop(std::make_shared<ChangeOperationMode::Request>(), 30, budget);
+        std::chrono::seconds(10), std::chrono::duration_cast<std::chrono::seconds>(
+                                    time_limit - std::chrono::steady_clock::now()));
+      try {
+        requestChangeToStop(std::make_shared<ChangeOperationMode::Request>(), 30, budget);
+      } catch (const common::AutowareError & error) {
+        throw common::AutowareError(
+          error.what(),
+          " -- the ego's Autoware is not reachable: is its vehicle side up and its agent "
+          "registered with the agent relay (the relay offers this service only while one "
+          "is)? Waited initialize_duration.");
+      }
     });
   }
 }
@@ -890,10 +899,12 @@ auto FieldOperatorApplication::setVelocityLimit(double velocity_limit) -> void
     auto request = std::make_shared<SetVelocityLimit::Request>();
     request->velocity = velocity_limit;
     /*
-       We attempt to resend the service up to 30 times, but this number of
-       times was determined by heuristics, not for any technical reason.
+       Upstream resends up to 30 times (3 s apart, ~90-180 s) on heuristics, to ride out an
+       Autoware still starting. The ego's Autoware is long-lived and already up when a
+       scenario starts, so a refusal here is a missing velocity-limit API on the vehicle
+       side, not a transient: five attempts (~15-30 s) and fail, naming the service.
     */
-    requestSetVelocityLimit(request, 30);
+    requestSetVelocityLimit(request, 5);
   });
 }
 

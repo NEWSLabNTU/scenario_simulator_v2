@@ -343,11 +343,12 @@ auto FieldOperatorApplication::clearRoute() -> void
 
   task_queue.delay([this] {
     /*
-       Since this service tends to be available long after the launch of
-       Autoware, set the attempts_count to a high value. There is no technical
-       basis for the number 30.
+       Upstream tries these 30 times (3 s apart) for an Autoware launched with the
+       scenario. Here Autoware is up before the scenario starts, so 10 (~30-60 s) rides
+       out a transient refusal and a persistent one fails the scenario in a minute.
+       The same holds for engage, enable_autoware_control and the RTC calls.
     */
-    requestClearRoute(std::make_shared<ClearRoute::Request>(), 30);
+    requestClearRoute(std::make_shared<ClearRoute::Request>(), 10);
   });
 }
 
@@ -357,7 +358,7 @@ auto FieldOperatorApplication::enableAutowareControl() -> void
 
   task_queue.delay([this]() {
     auto request = std::make_shared<ChangeOperationMode::Request>();
-    requestEnableAutowareControl(request, 30);
+    requestEnableAutowareControl(request, 10);
   });
 }
 
@@ -393,7 +394,7 @@ auto FieldOperatorApplication::engage() -> void
             request->engage = true;
             return request;
           }(),
-          30);
+          10);
         waitForAutowareStateToBe(
           LegacyAutowareState::waiting_for_engage, LegacyAutowareState::driving);
         time_limit = std::decay_t<decltype(time_limit)>::max();
@@ -717,7 +718,12 @@ auto FieldOperatorApplication::plan(
         waitForAutowareStateToBe(state, LegacyAutowareState::waiting_for_route);
         [[fallthrough]];
       case LegacyAutowareState::waiting_for_route:
-        requestSetRoutePoints(make<SetRoutePoints::Request>(goal, waypoints, option), 30);
+        /*
+           5 attempts, not upstream's 30: each waits up to this service's 10 s and sleeps 10 s
+           more, so 30 refusals of a route Autoware cannot plan held the scenario ~5-10 min.
+           By now Autoware waits for a route (checked above); a refusal is the route's.
+        */
+        requestSetRoutePoints(make<SetRoutePoints::Request>(goal, waypoints, option), 5);
         waitForAutowareStateToBe(
           LegacyAutowareState::waiting_for_route, LegacyAutowareState::planning);
         waitForAutowareStateToBe(
@@ -747,7 +753,7 @@ auto FieldOperatorApplication::plan(
         waitForAutowareStateToBe(state, LegacyAutowareState::waiting_for_route);
         [[fallthrough]];
       case LegacyAutowareState::waiting_for_route:
-        requestSetRoute(make<SetRoute::Request>(goal, waypoints, option), 30);
+        requestSetRoute(make<SetRoute::Request>(goal, waypoints, option), 5);  // as above
         waitForAutowareStateToBe(
           LegacyAutowareState::waiting_for_route, LegacyAutowareState::planning);
         waitForAutowareStateToBe(
@@ -775,7 +781,7 @@ auto FieldOperatorApplication::requestAutoModeForCooperation(
          We attempt to resend the service up to 30 times, but this number of
          times was determined by heuristics, not for any technical reason.
       */
-      requestSetRtcAutoMode(request, 30);
+      requestSetRtcAutoMode(request, 10);
     });
   } else {
     throw common::Error(
@@ -870,7 +876,7 @@ auto FieldOperatorApplication::sendCooperateCommand(
     request->stamp = cooperate_status_array.stamp;
     request->commands.push_back(cooperate_command);
 
-    task_queue.delay([this, request]() { requestCooperateCommands(request, 30); });
+    task_queue.delay([this, request]() { requestCooperateCommands(request, 10); });
 
     used_cooperate_statuses.push_back(*cooperate_status);
   }

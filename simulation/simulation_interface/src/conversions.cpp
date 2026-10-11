@@ -173,6 +173,7 @@ void toProto(
   toProto(p.bounding_box, *proto.mutable_bounding_box());
   toProto(p.axles, *proto.mutable_axles());
   toProto(p.performance, *proto.mutable_performance());
+  toProto(p.subtype, *proto.mutable_subtype());
   proto.set_name(p.name);
 }
 
@@ -183,6 +184,7 @@ void toMsg(
   toMsg(proto.axles(), p.axles);
   toMsg(proto.bounding_box(), p.bounding_box);
   toMsg(proto.performance(), p.performance);
+  toMsg(proto.subtype(), p.subtype);
   p.name = proto.name();
 }
 

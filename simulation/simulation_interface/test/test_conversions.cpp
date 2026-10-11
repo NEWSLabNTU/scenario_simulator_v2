@@ -196,6 +196,7 @@ TEST(Conversion, VehicleParameters)
   traffic_simulator_msgs::VehicleParameters proto;
   traffic_simulator_msgs::msg::VehicleParameters p;
   p.name = "foo";
+  p.subtype.value = traffic_simulator_msgs::msg::EntitySubtype::TRUCK;
   traffic_simulator_msgs::msg::BoundingBox box;
   box.center.x = 1.0;
   box.center.y = 1.23;
@@ -222,6 +223,7 @@ TEST(Conversion, VehicleParameters)
   EXPECT_DOUBLE_EQ(p.bounding_box.dimensions.x, 0);
   EXPECT_NO_THROW(simulation_interface::toMsg(proto, p));
   EXPECT_VEHICLE_PARAMETERS_EQ(p, proto);
+  EXPECT_EQ(p.subtype.value, traffic_simulator_msgs::msg::EntitySubtype::TRUCK);
 }
 
 TEST(Conversion, PedestrianParameters)

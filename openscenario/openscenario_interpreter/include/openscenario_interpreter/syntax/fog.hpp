@@ -18,6 +18,7 @@
 #include <openscenario_interpreter/scope.hpp>
 #include <openscenario_interpreter/syntax/bounding_box.hpp>
 #include <openscenario_interpreter/syntax/double.hpp>
+#include <optional>
 #include <pugixml.hpp>
 
 namespace openscenario_interpreter
@@ -40,7 +41,9 @@ struct Fog
 {
   const Double visual_range;  // Unit: [m]. Range: [0..inf[.
 
-  const BoundingBox bounding_box;  // Dimensions and center of fog in fixed coordinates.
+  // Dimensions and center of fog in fixed coordinates. Optional (minOccurs="0"); BoundingBox
+  // cannot be default-constructed, so a Fog without one was refused.
+  const std::optional<BoundingBox> bounding_box;
 
   Fog() = default;
 

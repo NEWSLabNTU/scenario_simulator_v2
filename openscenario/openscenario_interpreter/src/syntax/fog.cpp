@@ -24,7 +24,9 @@ inline namespace syntax
 {
 Fog::Fog(const pugi::xml_node & node, Scope & scope)
 : visual_range(readAttribute<Double>("visualRange", node, scope)),
-  bounding_box(readElement<BoundingBox>("BoundingBox", node, scope))
+  bounding_box(
+    node.child("BoundingBox") ? std::make_optional<BoundingBox>(node.child("BoundingBox"), scope)
+                              : std::nullopt)
 {
   // Valid range information:
   // https://www.asam.net/static_downloads/ASAM_OpenSCENARIO_V1.2.0_Model_Documentation/modelDocumentation/content/Fog.html

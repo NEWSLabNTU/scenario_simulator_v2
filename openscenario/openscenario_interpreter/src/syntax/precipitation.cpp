@@ -32,7 +32,8 @@ Precipitation::Precipitation(const pugi::xml_node & node, Scope & scope)
     THROW_SYNTAX_ERROR(std::quoted("Precipitation::intensity"), "is out of range [0..1]");
   }
 
-  if (auto precipitation_intensity_valid = 0 <= intensity; not precipitation_intensity_valid) {
+  if (auto precipitation_intensity_valid = 0 <= precipitation_intensity;
+      not precipitation_intensity_valid) {
     THROW_SYNTAX_ERROR(
       std::quoted("Precipitation::precipitationIntensity"), "is out of range [0..inf[");
   }

@@ -62,14 +62,12 @@ struct Environment : public Scope
 
   const ParameterDeclarations parameter_declarations;
 
-  // Optional (minOccurs="0"), and neither type can be default-constructed.
+  // Optional (minOccurs="0"), and none of these types can be default-constructed.
   const std::optional<TimeOfDay> time_of_day;
 
   const std::optional<Weather> weather;
 
-  const RoadCondition road_condition;
-
-  const bool has_road_condition;  // Whether RoadCondition is given (else it does not change).
+  const std::optional<RoadCondition> road_condition;  // Not given: it does not change.
 };
 
 }  // namespace syntax

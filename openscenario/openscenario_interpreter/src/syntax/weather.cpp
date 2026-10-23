@@ -20,29 +20,42 @@ namespace openscenario_interpreter
 {
 inline namespace syntax
 {
+namespace
+{
+template <typename T>
+auto readOptionalElement(const char * name, const pugi::xml_node & node, Scope & scope)
+  -> std::optional<T>
+{
+  if (const auto child = node.child(name)) {
+    return std::make_optional<T>(child, scope);
+  } else {
+    return std::nullopt;
+  }
+}
+}  // namespace
+
 Weather::Weather(const pugi::xml_node & node, Scope & scope)
-: atmospheric_pressure(readAttribute<Double>("atmosphericPressure", node, scope)),
-  temperature(readAttribute<Double>("temperature", node, scope)),
-  fractional_cloud_cover(readAttribute<FractionalCloudCover>("fractionalCloudCover", node, scope)),
-  sun(readElement<Sun>("Sun", node, scope)),
-  fog(readElement<Fog>("Fog", node, scope)),
-  precipitation(readElement<Precipitation>("Precipitation", node, scope)),
-  wind(readElement<Wind>("Wind", node, scope)),
-  dome_image(readElement<DomeImage>("DomeImage", node, scope))
+: atmospheric_pressure(readAttribute<Double>("atmosphericPressure", node, scope, std::nullopt)),
+  temperature(readAttribute<Double>("temperature", node, scope, std::nullopt)),
+  cloud_state(readAttribute<String>("cloudState", node, scope, std::nullopt)),
+  fractional_cloud_cover(
+    readAttribute<FractionalCloudCover>("fractionalCloudCover", node, scope, std::nullopt)),
+  sun(readOptionalElement<Sun>("Sun", node, scope)),
+  fog(readOptionalElement<Fog>("Fog", node, scope)),
+  precipitation(readOptionalElement<Precipitation>("Precipitation", node, scope)),
+  wind(readOptionalElement<Wind>("Wind", node, scope)),
+  dome_image(readOptionalElement<DomeImage>("DomeImage", node, scope))
 {
   // Valid range ref:
   // https://www.asam.net/static_downloads/ASAM_OpenSCENARIO_V1.2.0_Model_Documentation/modelDocumentation/content/Weather.html
 
-  // [80000...120000]
-  if (auto atmospheric_pressure_valid =
-        80000 <= atmospheric_pressure and atmospheric_pressure <= 120000;
-      not atmospheric_pressure_valid) {
+  if (atmospheric_pressure and
+      not(80000 <= *atmospheric_pressure and *atmospheric_pressure <= 120000)) {
     THROW_SYNTAX_ERROR(
       std::quoted("Weather::atmosphericPressure"), "is out of range [80000...120000]");
   }
 
-  // [170...340]
-  if (auto temperature_valid = 170 <= temperature and temperature <= 340; not temperature_valid) {
+  if (temperature and not(170 <= *temperature and *temperature <= 340)) {
     THROW_SYNTAX_ERROR(std::quoted("Weather::temperature"), "is out of range [170...340]");
   }
 }

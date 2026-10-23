@@ -30,8 +30,10 @@ Environment::Environment(const pugi::xml_node & node, Scope & scope)
   weather(
     node.child("Weather") ? std::make_optional<Weather>(node.child("Weather"), local())
                           : std::nullopt),
-  road_condition(readElement<RoadCondition>("RoadCondition", node, local())),
-  has_road_condition(static_cast<bool>(node.child("RoadCondition")))
+  road_condition(
+    node.child("RoadCondition")
+      ? std::make_optional<RoadCondition>(node.child("RoadCondition"), local())
+      : std::nullopt)
 {
 }
 }  // namespace syntax

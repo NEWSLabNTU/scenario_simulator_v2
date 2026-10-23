@@ -263,6 +263,11 @@ class ScenarioTestRunner(LifecycleController):
         future = self.load_preprocessor_client.call_async(request)
         rclpy.spin_until_future_complete(self, future)
         if future.result() is not None:
+            if not future.result().has_succeeded:
+                # Otherwise the run ends with nothing derived and no word of why.
+                self.get_logger().error(
+                    "The preprocessor refused " + str(scenario.path) + ": "
+                    + future.result().message)
             return True
         else:
             self.print_debug('Exception while calling service /simulation/openscenario_preprocessor/load: '

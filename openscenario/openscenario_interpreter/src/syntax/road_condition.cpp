@@ -23,7 +23,7 @@ inline namespace syntax
 {
 RoadCondition::RoadCondition(const pugi::xml_node & node, Scope & scope)
 : friction_scale_factor(readAttribute<Double>("frictionScaleFactor", node, scope)),
-  wetness(readAttribute<Wetness>("wetness", node, scope)),
+  wetness(readAttribute<Wetness>("wetness", node, scope, Wetness::dry)),
   properties(readElement<Properties>("Properties", node, scope))
 {
   // Valid range ref:

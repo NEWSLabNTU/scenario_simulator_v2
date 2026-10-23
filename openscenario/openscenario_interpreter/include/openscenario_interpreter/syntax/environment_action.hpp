@@ -16,6 +16,7 @@
 #define OPENSCENARIO_INTERPRETER__SYNTAX__ENVIRONMENT_ACTION_HPP_
 
 #include <openscenario_interpreter/scope.hpp>
+#include <openscenario_interpreter/simulator_core.hpp>
 #include <pugixml.hpp>
 
 namespace openscenario_interpreter
@@ -32,7 +33,7 @@ inline namespace syntax
  * </xsd:complexType>
  *
  * -------------------------------------------------------------------------- */
-struct EnvironmentAction : public ComplexType
+struct EnvironmentAction : public ComplexType, private SimulatorCore::ActionApplication
 {
   explicit EnvironmentAction(const pugi::xml_node &, Scope &);
 
@@ -42,7 +43,7 @@ struct EnvironmentAction : public ComplexType
 
   static auto run() -> void;
 
-  /*  */ auto start() -> void;
+  /*  */ auto start() const -> void;
 };
 
 }  // namespace syntax

@@ -55,6 +55,9 @@ public:
   auto call(const simulation_api_schema::UpdateEntityGoalRequest &)
     -> simulation_api_schema::UpdateEntityGoalResponse;
 
+  auto call(const simulation_api_schema::UpdateEnvironmentRequest &)
+    -> simulation_api_schema::UpdateEnvironmentResponse;
+
   auto call(const simulation_api_schema::SpawnVehicleEntityRequest &)
     -> simulation_api_schema::SpawnVehicleEntityResponse;
 

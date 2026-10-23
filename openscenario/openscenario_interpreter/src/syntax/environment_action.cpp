@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <boost/lexical_cast.hpp>
 #include <openscenario_interpreter/reader/element.hpp>
 #include <openscenario_interpreter/syntax/catalog_reference.hpp>
 #include <openscenario_interpreter/syntax/environment.hpp>
@@ -32,12 +33,30 @@ EnvironmentAction::EnvironmentAction(const pugi::xml_node & node, Scope & scope)
 {
 }
 
-auto EnvironmentAction::accomplished() noexcept -> bool { return false; }
+auto EnvironmentAction::accomplished() noexcept -> bool { return true; }
 
-auto EnvironmentAction::endsImmediately() noexcept -> bool { return false; }
+auto EnvironmentAction::endsImmediately() noexcept -> bool { return true; }
 
-auto EnvironmentAction::run() -> void { LINE(); }
+auto EnvironmentAction::run() -> void {}
 
-auto EnvironmentAction::start() -> void { LINE(); }
+/*
+   The simulator is told the road condition; the time of day and the weather are not sent
+   yet. A RoadCondition is a whole road state: it replaces the last one, properties included.
+*/
+auto EnvironmentAction::start() const -> void
+{
+  const auto & environment = as<Environment>();
+  if (not environment.has_road_condition) {
+    return;
+  }
+  simulation_api_schema::UpdateEnvironmentRequest request;
+  auto & road_condition = *request.mutable_road_condition();
+  road_condition.set_friction_scale_factor(environment.road_condition.friction_scale_factor);
+  road_condition.set_wetness(boost::lexical_cast<String>(environment.road_condition.wetness));
+  for (const auto & [name, property] : environment.road_condition.properties.properties) {
+    (*road_condition.mutable_properties())[name] = property.value;
+  }
+  applyEnvironmentAction(request);
+}
 }  // namespace syntax
 }  // namespace openscenario_interpreter

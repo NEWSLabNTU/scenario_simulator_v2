@@ -152,6 +152,9 @@ public:
   // update
   auto updateFrame() -> bool;
 
+  /// @note OpenSCENARIO EnvironmentAction: sent to the simulator at once; throws when it is refused.
+  auto updateEnvironment(const simulation_api_schema::UpdateEnvironmentRequest &) -> void;
+
   // entities, ego - spawn
   template <
     typename PoseType, typename ParamsType,

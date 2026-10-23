@@ -156,6 +156,18 @@ auto MultiClient::call(const simulation_api_schema::UpdateEntityGoalRequest & re
   }
 }
 
+auto MultiClient::call(const simulation_api_schema::UpdateEnvironmentRequest & request)
+  -> simulation_api_schema::UpdateEnvironmentResponse
+{
+  if (is_running) {
+    simulation_api_schema::SimulationRequest sim_request;
+    *sim_request.mutable_update_environment() = request;
+    return call(sim_request).update_environment();
+  } else {
+    return {};
+  }
+}
+
 auto MultiClient::call(const simulation_api_schema::SpawnVehicleEntityRequest & request)
   -> simulation_api_schema::SpawnVehicleEntityResponse
 {

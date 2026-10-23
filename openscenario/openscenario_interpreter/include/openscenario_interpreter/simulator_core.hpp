@@ -314,6 +314,12 @@ public:
     }
 
     template <typename... Ts>
+    static auto applyEnvironmentAction(Ts &&... xs) -> decltype(auto)
+    {
+      return core->updateEnvironment(std::forward<decltype(xs)>(xs)...);
+    }
+
+    template <typename... Ts>
     static auto applyAddEntityAction(Ts &&... xs) -> decltype(auto)
     {
       return core->spawn(std::forward<decltype(xs)>(xs)...);

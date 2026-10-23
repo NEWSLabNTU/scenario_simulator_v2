@@ -96,6 +96,14 @@ void MultiServer::poll()
         sim_response.mutable_update_entity_goal()->mutable_result()->set_success(true);
         break;
       }
+      case simulation_api_schema::SimulationRequest::RequestCase::kUpdateEnvironment: {
+        /*
+           A server built on MultiServer simulates no road surface or weather: the
+           environment changes nothing it computes, and is acknowledged.
+        */
+        sim_response.mutable_update_environment()->mutable_result()->set_success(true);
+        break;
+      }
       case simulation_api_schema::SimulationRequest::RequestCase::REQUEST_NOT_SET: {
         THROW_SIMULATION_ERROR("No case defined for oneof in SimulationRequest message");
       }

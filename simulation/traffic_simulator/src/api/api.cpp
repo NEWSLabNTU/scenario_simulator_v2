@@ -149,6 +149,18 @@ auto API::updateEntityGoalsInSim() -> bool
   return true;
 }
 
+auto API::updateEnvironment(const simulation_api_schema::UpdateEnvironmentRequest & request)
+  -> void
+{
+  if (configuration_.standalone_mode) {
+    return;
+  }
+  if (const auto response = zeromq_client_.call(request); not response.result().success()) {
+    THROW_SIMULATION_ERROR(
+      "The simulator refused the environment: ", response.result().description());
+  }
+}
+
 auto API::updateTrafficLightsInSim() -> bool
 {
   if (traffic_lights_ptr_->isAnyTrafficLightChanged()) {

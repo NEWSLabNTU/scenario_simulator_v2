@@ -24,9 +24,14 @@ Environment::Environment(const pugi::xml_node & node, Scope & scope)
 : Scope(readAttribute<String>("name", node, local()), scope),
   parameter_declarations(
     readElement<ParameterDeclarations>("ParameterDeclarations", node, local())),
-  time_of_day(readElement<TimeOfDay>("TimeOfDay", node, local())),
-  weather(readElement<Weather>("Weather", node, local())),
-  road_condition(readElement<RoadCondition>("RoadCondition", node, local()))
+  time_of_day(
+    node.child("TimeOfDay") ? std::make_optional<TimeOfDay>(node.child("TimeOfDay"), local())
+                            : std::nullopt),
+  weather(
+    node.child("Weather") ? std::make_optional<Weather>(node.child("Weather"), local())
+                          : std::nullopt),
+  road_condition(readElement<RoadCondition>("RoadCondition", node, local())),
+  has_road_condition(static_cast<bool>(node.child("RoadCondition")))
 {
 }
 }  // namespace syntax

@@ -20,6 +20,7 @@
 #include <openscenario_interpreter/syntax/road_condition.hpp>
 #include <openscenario_interpreter/syntax/time_of_day.hpp>
 #include <openscenario_interpreter/syntax/weather.hpp>
+#include <optional>
 #include <pugixml.hpp>
 
 namespace openscenario_interpreter
@@ -61,11 +62,14 @@ struct Environment : public Scope
 
   const ParameterDeclarations parameter_declarations;
 
-  const TimeOfDay time_of_day;
+  // Optional (minOccurs="0"), and neither type can be default-constructed.
+  const std::optional<TimeOfDay> time_of_day;
 
-  const Weather weather;
+  const std::optional<Weather> weather;
 
   const RoadCondition road_condition;
+
+  const bool has_road_condition;  // Whether RoadCondition is given (else it does not change).
 };
 
 }  // namespace syntax

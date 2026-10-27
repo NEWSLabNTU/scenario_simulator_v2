@@ -105,11 +105,14 @@ private:
 
      Initialize gets its own, longer bound (SIMULATOR_INITIALIZE_TIMEOUT, seconds, default
      300): it is the one request that may wait for a restarting simulator and load another
-     map. Every other request (SIMULATOR_RESPONSE_TIMEOUT, seconds, default 90) is a frame,
-     a spawn or a despawn, which a healthy simulator answers in milliseconds.
+     map. A spawn gets SIMULATOR_SPAWN_TIMEOUT (seconds, default 150): a world server may warm
+     a sensor up or compile a body's materials in it, and the bridge gives it 120 s. Every
+     other request (SIMULATOR_RESPONSE_TIMEOUT, seconds, default 90) is a frame or a despawn,
+     which a healthy simulator answers in milliseconds.
   */
   const int receive_timeout_ms_;
   const int initialize_timeout_ms_;
+  const int spawn_timeout_ms_;
   int current_timeout_ms_ = -2;  // what the socket is set to; -2 = not yet set
 
   auto call(const simulation_api_schema::SimulationRequest &, int timeout_ms)

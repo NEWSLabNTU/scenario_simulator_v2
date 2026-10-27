@@ -32,6 +32,12 @@ namespace
    SIMULATOR_INITIALIZE_TIMEOUT (default 300 s) bounds Initialize, which may wait for a
    restarting CARLA (bridge carla.reconnect_wait_seconds, 120) and then load another town
    (up to the bridge's 120 s map-load RPC timeout; 44 s measured for Town02 at Epic).
+
+   SIMULATOR_SPAWN_TIMEOUT (default 150 s) bounds the three spawns: the bridge gives a world
+   server's Spawn its load_timeout_seconds, 120 s, since an Isaac ego warms its sensors up and a
+   walker's first render compiles its materials, so SSv2 must wait longer than that, not the
+   frames' 90 s (scenario-world-bridge issue 018: a 90.5 s Spawn on a loaded host ended the
+   run as if the simulator had died).
 */
 auto timeoutMilliseconds(const char * name, double default_seconds) -> int
 {
@@ -53,6 +59,7 @@ MultiClient::MultiClient(
   endpoint_(simulation_interface::getEndPoint(protocol, hostname, socket_port)),
   receive_timeout_ms_(timeoutMilliseconds("SIMULATOR_RESPONSE_TIMEOUT", 90)),
   initialize_timeout_ms_(timeoutMilliseconds("SIMULATOR_INITIALIZE_TIMEOUT", 300)),
+  spawn_timeout_ms_(timeoutMilliseconds("SIMULATOR_SPAWN_TIMEOUT", 150)),
   socket_(context_, type_)
 {
   connect();
@@ -79,7 +86,12 @@ MultiClient::~MultiClient() { closeConnection(); }
 auto MultiClient::call(const simulation_api_schema::SimulationRequest & req)
   -> simulation_api_schema::SimulationResponse
 {
-  return call(req, req.has_initialize() ? initialize_timeout_ms_ : receive_timeout_ms_);
+  const bool spawn = req.has_spawn_vehicle_entity() or req.has_spawn_pedestrian_entity() or
+                     req.has_spawn_misc_object_entity();
+  return call(
+    req, req.has_initialize() ? initialize_timeout_ms_
+         : spawn              ? spawn_timeout_ms_
+                              : receive_timeout_ms_);
 }
 
 auto MultiClient::call(const simulation_api_schema::SimulationRequest & req, int timeout_ms)
@@ -102,7 +114,11 @@ auto MultiClient::call(const simulation_api_schema::SimulationRequest & req, int
     connect();
     THROW_SIMULATION_ERROR(
       "No response from the simulator at ", endpoint_, " within ", timeout_ms / 1000.0, " s (",
-      req.has_initialize() ? "SIMULATOR_INITIALIZE_TIMEOUT" : "SIMULATOR_RESPONSE_TIMEOUT",
+      req.has_initialize() ? "SIMULATOR_INITIALIZE_TIMEOUT"
+      : (req.has_spawn_vehicle_entity() or req.has_spawn_pedestrian_entity() or
+         req.has_spawn_misc_object_entity())
+        ? "SIMULATOR_SPAWN_TIMEOUT"
+        : "SIMULATOR_RESPONSE_TIMEOUT",
       "). It may have crashed or hung with this request outstanding, or not be running.");
   }
   return toProto<simulation_api_schema::SimulationResponse>(buffer);

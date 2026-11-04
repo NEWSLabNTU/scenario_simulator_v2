@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cmath>
 #include <geometry/quaternion/euler_to_quaternion.hpp>
 #include <geometry/quaternion/get_rotation.hpp>
 #include <geometry/quaternion/quaternion_to_euler.hpp>
@@ -113,10 +114,18 @@ auto CanonicalizedLaneletPose::adjustOrientationAndOzPosition() -> void
     const auto lanelet_quaternion = spline->getPose(lanelet_pose_.s, true).orientation;
     const auto lanelet_rpy = convertQuaternionToEulerAngle(lanelet_quaternion);
     const auto entity_rpy = convertQuaternionToEulerAngle(map_pose_.orientation);
+    /*
+       The road's slope along the entity's heading, not along the lanelet's: an entity
+       matched to a lanelet that runs the other way (as on a two-way lane drawn as two
+       opposite lanelets over one another) climbs where its lanelet descends. Taking the
+       lanelet's pitch as is put such an entity nose down on an uphill.
+    */
+    const auto pitch =
+      std::atan(std::tan(lanelet_rpy.y) * std::cos(entity_rpy.z - lanelet_rpy.z));
     map_pose_.orientation =
       convertEulerAngleToQuaternion(geometry_msgs::build<geometry_msgs::msg::Vector3>()
                                       .x(entity_rpy.x)
-                                      .y(lanelet_rpy.y)
+                                      .y(pitch)
                                       .z(entity_rpy.z));
     lanelet_pose_.rpy =
       convertQuaternionToEulerAngle(getRotation(lanelet_quaternion, map_pose_.orientation));

@@ -85,6 +85,14 @@ ament_auto_add_library(traffic_simulator SHARED
   src/utils/traffic_lights.cpp
 )
 
+# Boost.Geometry 1.74 (Ubuntu 22.04) trips GCC 12's -Wmaybe-uninitialized in
+# rescale_policy.hpp (`factor`) once optimised (Release); lanelet2's polygon relations
+# instantiate it here. The warning is in Boost, so it stays a warning for this file only.
+if(CMAKE_COMPILER_IS_GNUCXX)
+  set_source_files_properties(src/lanelet_wrapper/lanelet_map.cpp
+    PROPERTIES COMPILE_OPTIONS -Wno-error=maybe-uninitialized)
+endif()
+
 ament_auto_add_library(visualization_component SHARED
   src/visualization/visualization_component.cpp
 )

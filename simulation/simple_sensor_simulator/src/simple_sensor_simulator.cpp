@@ -236,6 +236,14 @@ auto ScenarioSimulator::spawnPedestrianEntity(
   const simulation_api_schema::SpawnPedestrianEntityRequest & req)
   -> simulation_api_schema::SpawnPedestrianEntityResponse
 {
+  if (req.behavior() == "model") {
+    /// @note This simulator runs no behaviour models; such an entity would never move.
+    auto res = simulation_api_schema::SpawnPedestrianEntityResponse();
+    res.mutable_result()->set_success(false);
+    res.mutable_result()->set_description(
+      "simple_sensor_simulator cannot move an entity by a behaviour model (controller model)");
+    return res;
+  }
   pedestrians_.emplace_back(req.parameters());
   insertEntitySpawnedStatus(
     req, traffic_simulator_msgs::EntityType::PEDESTRIAN,

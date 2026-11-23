@@ -170,6 +170,14 @@ message SpawnPedestrianEntityRequest {
   traffic_simulator_msgs.PedestrianParameters parameters = 1; // Parameters of pedestrian entity.
   string asset_key = 2;                                       // Asset key of the entity simulator entity
   geometry_msgs.Pose pose = 3;                                // Entity initial pose
+  /**
+   * The entity's behavior: its OpenSCENARIO controller name, or the traffic_simulator plugin
+   * it runs (empty for the default behavior). "model" asks the simulator to move the entity by
+   * the kinematic commands of a behaviour model it runs beside the scenario: traffic_simulator
+   * runs no behavior for it and adopts the pose the simulator returns in UpdateEntityStatus. A
+   * simulator that cannot move an entity that way must refuse the spawn.
+   */
+  string behavior = 4;
 }
 
 /**

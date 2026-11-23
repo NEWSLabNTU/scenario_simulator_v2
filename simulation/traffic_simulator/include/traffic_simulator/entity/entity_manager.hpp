@@ -25,6 +25,7 @@
 #include <traffic_simulator/entity/entity_base.hpp>
 #include <traffic_simulator/entity/misc_object_entity.hpp>
 #include <traffic_simulator/entity/pedestrian_entity.hpp>
+#include <traffic_simulator/entity/simulator_driven_pedestrian_entity.hpp>
 #include <traffic_simulator/entity/simulator_driven_vehicle_entity.hpp>
 #include <traffic_simulator/entity/vehicle_entity.hpp>
 #include <traffic_simulator/traffic_lights/configurable_rate_updater.hpp>
@@ -144,7 +145,7 @@ public:
         }
       } else if constexpr (std::is_base_of_v<VehicleEntity, std::decay_t<EntityType>>) {
         entity_status.type.type = traffic_simulator_msgs::msg::EntityType::VEHICLE;
-      } else if constexpr (std::is_same_v<std::decay_t<EntityType>, PedestrianEntity>) {
+      } else if constexpr (std::is_base_of_v<PedestrianEntity, std::decay_t<EntityType>>) {
         entity_status.type.type = traffic_simulator_msgs::msg::EntityType::PEDESTRIAN;
       } else {
         entity_status.type.type = traffic_simulator_msgs::msg::EntityType::MISC_OBJECT;

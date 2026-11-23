@@ -184,9 +184,14 @@ public:
             behavior.empty() ? VehicleBehavior::defaultBehavior() : behavior);
         }
       } else if constexpr (std::is_same_v<ParamsType, PedestrianParameters>) {
-        return entity_manager_ptr_->spawnEntity<entity::PedestrianEntity>(
-          name, pose, parameters, getCurrentTime(),
-          behavior.empty() ? PedestrianBehavior::defaultBehavior() : behavior);
+        if (entity::SimulatorDrivenPedestrianEntity::drives(behavior)) {
+          return entity_manager_ptr_->spawnEntity<entity::SimulatorDrivenPedestrianEntity>(
+            name, pose, parameters, getCurrentTime(), behavior);
+        } else {
+          return entity_manager_ptr_->spawnEntity<entity::PedestrianEntity>(
+            name, pose, parameters, getCurrentTime(),
+            behavior.empty() ? PedestrianBehavior::defaultBehavior() : behavior);
+        }
       } else if constexpr (std::is_same_v<ParamsType, MiscObjectParameters>) {
         return entity_manager_ptr_->spawnEntity<entity::MiscObjectEntity>(
           name, pose, parameters, getCurrentTime());
@@ -214,6 +219,7 @@ public:
           return prepare_and_send_request(entity, request);
         } else if constexpr (std::is_same_v<ParamsType, PedestrianParameters>) {
           simulation_api_schema::SpawnPedestrianEntityRequest request;
+          request.set_behavior(behavior);
           return prepare_and_send_request(entity, request);
         } else if constexpr (std::is_same_v<ParamsType, MiscObjectParameters>) {
           simulation_api_schema::SpawnMiscObjectEntityRequest request;

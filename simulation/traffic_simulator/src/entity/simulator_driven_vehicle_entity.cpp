@@ -33,8 +33,20 @@ auto SimulatorDrivenVehicleEntity::takeGoalUpdates() -> std::vector<GoalUpdate>
   return std::exchange(goal_updates_, {});
 }
 
+auto SimulatorDrivenVehicleEntity::refuseForModel(const std::string & action) const -> void
+{
+  if (behavior_ == modelBehaviorName()) {
+    THROW_SEMANTIC_ERROR(
+      action, " was requested for ", std::quoted(name), ", which is moved by its controller ",
+      behavior_, ": a behaviour model decides its motion.");
+  }
+}
+
 void SimulatorDrivenVehicleEntity::cancelRequest()
 {
+  if (behavior_ == modelBehaviorName()) {
+    return;  // nothing was requested of it
+  }
   GoalUpdate update;
   update.clear = true;
   goal_updates_.push_back(update);
@@ -67,6 +79,7 @@ void SimulatorDrivenVehicleEntity::requestAcquirePosition(
 void SimulatorDrivenVehicleEntity::requestAcquirePosition(
   const geometry_msgs::msg::Pose & map_pose, const RouteOption &)
 {
+  refuseForModel("AcquirePositionAction");
   GoalUpdate update;
   update.waypoints.push_back(map_pose);
   goal_updates_.push_back(update);
@@ -75,6 +88,7 @@ void SimulatorDrivenVehicleEntity::requestAcquirePosition(
 void SimulatorDrivenVehicleEntity::requestAssignRoute(
   const std::vector<geometry_msgs::msg::Pose> & waypoints, const RouteOption &)
 {
+  refuseForModel("AssignRouteAction");
   if (waypoints.empty()) {
     THROW_SEMANTIC_ERROR("AssignRouteAction for ", std::quoted(name), " has no waypoints.");
   }
@@ -131,6 +145,7 @@ void SimulatorDrivenVehicleEntity::requestSpeedChange(
 
 void SimulatorDrivenVehicleEntity::requestSpeedChange(const double target_speed, const bool)
 {
+  refuseForModel("SpeedAction");
   /// @note The simulator's driver chooses the transition; only the target is forwarded.
   GoalUpdate update;
   update.target_speed = target_speed;

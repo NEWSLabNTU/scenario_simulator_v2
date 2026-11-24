@@ -344,8 +344,9 @@ auto EntityManager::resetBehaviorPlugin(
     /// @note The simulator learns who drives an entity only at its spawn.
     THROW_SEMANTIC_ERROR(
       "Entity ", std::quoted(name), ": switching to or from controller ",
-      SimulatorDrivenVehicleEntity::behaviorName(), " or ",
-      SimulatorDrivenVehicleEntity::agentBehaviorName(), " after the spawn is not supported.");
+      SimulatorDrivenVehicleEntity::behaviorName(), ", ",
+      SimulatorDrivenVehicleEntity::agentBehaviorName(), " or ",
+      SimulatorDrivenVehicleEntity::modelBehaviorName(), " after the spawn is not supported.");
   } else if (
     reference_entity.is<SimulatorDrivenPedestrianEntity>() or
     SimulatorDrivenPedestrianEntity::drives(behavior_plugin_name)) {

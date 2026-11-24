@@ -36,6 +36,10 @@ namespace entity
  * API::updateFrame sends to the simulator as UpdateEntityGoal before the frame's
  * UpdateEntityStatus. Requests the simulator's driver cannot honor (lane changes, relative
  * speeds, trajectories) are semantic errors, not silently ignored.
+ *
+ * Controller "model" (scensim 092 K13): a behaviour model run beside the scenario commands the
+ * vehicle, and the simulator integrates its commands. Nothing of the scenario reaches it: goal,
+ * route and speed requests are semantic errors too, as for SimulatorDrivenPedestrianEntity.
  */
 class SimulatorDrivenVehicleEntity : public VehicleEntity
 {
@@ -59,10 +63,17 @@ public:
     return name;
   }
 
+  static auto modelBehaviorName() noexcept -> const std::string &
+  {
+    static const std::string name = "model";
+    return name;
+  }
+
   /// True for the controller names this entity type stands for.
   static auto drives(const std::string & behavior) noexcept -> bool
   {
-    return behavior == behaviorName() or behavior == agentBehaviorName();
+    return behavior == behaviorName() or behavior == agentBehaviorName() or
+           behavior == modelBehaviorName();
   }
 
   explicit SimulatorDrivenVehicleEntity(
@@ -112,6 +123,9 @@ public:
     const speed_change::RelativeTargetSpeed &, const bool continuous) override;
 
 private:
+  /// A model's vehicle takes no goal, route or speed from the scenario.
+  auto refuseForModel(const std::string & action) const -> void;
+
   const std::string behavior_;
 
   std::vector<GoalUpdate> goal_updates_;
